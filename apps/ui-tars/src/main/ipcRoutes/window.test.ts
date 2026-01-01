@@ -7,6 +7,10 @@ vi.mock('@main/window', () => ({
   showWindow: vi.fn(),
 }));
 
+vi.mock('@main/window/createWindow', () => ({
+  appUpdater: undefined,
+}));
+
 describe('windowRoute.showMainWindow', () => {
   beforeEach(() => {
     vi.clearAllMocks();

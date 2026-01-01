@@ -76,7 +76,6 @@ export class AgentSession {
   private storageUnsubscribeMap = new WeakMap<IAgent, () => void>();
   private pendingEventSaves = new Set<Promise<void>>();
 
-
   constructor(
     private server: AgentServer,
     sessionId: string,
@@ -93,7 +92,6 @@ export class AgentSession {
     // Agent will be created and initialized in initialize() method
     this.agent = null as any; // Temporary placeholder
   }
-
 
   async initialize() {
     // Create and initialize agent with all wrappers
@@ -112,7 +110,6 @@ export class AgentSession {
     return { storageUnsubscribe };
   }
 
-
   /**
    * Create event handler for storage and AGIO processing
    */
@@ -120,14 +117,15 @@ export class AgentSession {
     return async (event: AgentEventStream.Event) => {
       // Save to storage if available and event should be stored
       if (shouldStoreEvent(event)) {
-        const savePromise = this.server.daoFactory.saveEvent(this.id, event)
-          .catch(error => {
+        const savePromise = this.server.daoFactory
+          .saveEvent(this.id, event)
+          .catch((error) => {
             console.error(`Failed to save event to storage: ${error}`);
           })
           .finally(() => {
             this.pendingEventSaves.delete(savePromise);
           });
-        
+
         this.pendingEventSaves.add(savePromise);
       }
 
@@ -142,7 +140,7 @@ export class AgentSession {
     };
   }
 
-    /**
+  /**
    * Wait for all pending event saves to complete
    * This ensures that all events emitted during initialization are persisted before querying storage
    */
@@ -201,7 +199,6 @@ export class AgentSession {
 
     // Apply snapshot wrapper if enabled
     const wrappedAgent = this.createAgentWithSnapshot(baseAgent, this.id);
-
 
     // 🎯 Setup event stream connections BEFORE agent initialization
     // This ensures that any events emitted during initialize() are properly persisted
@@ -316,7 +313,6 @@ export class AgentSession {
 
     return baseAgent;
   }
-
 
   /**
    * Get the current processing status of the agent

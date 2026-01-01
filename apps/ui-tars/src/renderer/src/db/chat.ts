@@ -7,7 +7,7 @@ import { get, set, del, createStore } from 'idb-keyval';
 import { ConversationWithSoM } from '@/main/shared/types';
 
 export interface ChatMetaInfo {
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 const DBName = 'ui_tars_db_chat';

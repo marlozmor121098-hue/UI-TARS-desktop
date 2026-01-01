@@ -13,6 +13,12 @@ import { readJsonSync, writeJsonSync } from 'fs-extra';
 import type { WorkspacePackage } from '../types';
 import { logger } from './logger';
 
+type PackageJsonLike = {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+};
+
 // Keeps track of original dependencies to restore after publishing
 export interface DependencyBackup {
   packagePath: string;
@@ -25,9 +31,9 @@ export interface DependencyBackup {
  * Helper function to check for unreplaced workspace dependencies
  */
 export const checkUnreplacedDeps = (
-  deps: Record<string, string> | undefined, 
-  pkgName: string, 
-  type = 'dependencies'
+  deps: Record<string, string> | undefined,
+  pkgName: string,
+  type = 'dependencies',
 ): void => {
   if (!deps) return;
   Object.entries(deps).forEach(([dep, depVersion]) => {
@@ -42,15 +48,22 @@ export const checkUnreplacedDeps = (
 /**
  * Checks if a package has workspace dependencies
  */
-export const hasWorkspaceDependencies = (packageJson: any): boolean => {
+export const hasWorkspaceDependencies = (
+  packageJson: PackageJsonLike,
+): boolean => {
   return [
     packageJson.dependencies,
     packageJson.devDependencies,
     packageJson.peerDependencies,
-  ].some((deps) => 
-    deps && Object.values(deps).some((depVersion) => 
-      depVersion && typeof depVersion === 'string' && depVersion.startsWith('workspace:')
-    )
+  ].some(
+    (deps) =>
+      deps &&
+      Object.values(deps).some(
+        (depVersion) =>
+          depVersion &&
+          typeof depVersion === 'string' &&
+          depVersion.startsWith('workspace:'),
+      ),
   );
 };
 
@@ -59,7 +72,7 @@ export const hasWorkspaceDependencies = (packageJson: any): boolean => {
  */
 export function createDependencyBackup(
   packageJsonPath: string,
-  packageJson: any,
+  packageJson: PackageJsonLike,
 ): DependencyBackup {
   return {
     packagePath: packageJsonPath,
@@ -85,7 +98,7 @@ export async function replaceWorkspaceDependencies(
   dryRun = false,
 ): Promise<DependencyBackup | null> {
   const packageJsonPath = join(pkg.dir, 'package.json');
-  const packageJson = readJsonSync(packageJsonPath);
+  const packageJson = readJsonSync(packageJsonPath) as PackageJsonLike;
 
   // Check if there are any workspace dependencies
   if (!hasWorkspaceDependencies(packageJson)) {
@@ -96,7 +109,9 @@ export async function replaceWorkspaceDependencies(
   const backup = createDependencyBackup(packageJsonPath, packageJson);
 
   if (dryRun) {
-    logger.info(`[dry-run] Would replace workspace dependencies in ${pkg.name}`);
+    logger.info(
+      `[dry-run] Would replace workspace dependencies in ${pkg.name}`,
+    );
     return backup;
   }
 
@@ -122,7 +137,7 @@ export async function replaceWorkspaceDependencies(
   updateDeps(packageJson.peerDependencies);
 
   writeJsonSync(packageJsonPath, packageJson, { spaces: 2 });
-  
+
   return backup;
 }
 

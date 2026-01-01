@@ -46,8 +46,10 @@ describe('NutJSElectronOperator', () => {
         display_id: '1',
         thumbnail: {
           toPNG: () => Buffer.from('mock-image'),
+          toJPEG: () => Buffer.from('mock-image'),
           resize: () => ({
             toPNG: () => Buffer.from('mock-image'),
+            toJPEG: () => Buffer.from('mock-image'),
           }),
         },
       };

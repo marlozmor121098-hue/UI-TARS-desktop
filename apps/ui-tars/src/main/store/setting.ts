@@ -12,18 +12,33 @@ import {
   LocalStore,
   SearchEngineForSettings,
   VLMProviderV2,
+  getVlmDefaults,
   Operator,
 } from './types';
 import { validatePreset } from './validate';
 import { BrowserWindow } from 'electron';
 
+const resolveVlmProvider = (provider: unknown): VLMProviderV2 => {
+  const values = Object.values(VLMProviderV2) as unknown as string[];
+  if (typeof provider === 'string' && values.includes(provider)) {
+    return provider as VLMProviderV2;
+  }
+  return VLMProviderV2.gemini;
+};
+
 export const DEFAULT_SETTING: LocalStore = {
   language: 'en',
-  vlmProvider: (env.vlmProvider as VLMProviderV2) || '',
-  vlmBaseUrl: env.vlmBaseUrl || '',
-  vlmApiKey: env.vlmApiKey || '',
-  vlmModelName: env.vlmModelName || '',
-  useResponsesApi: false,
+  ...(() => {
+    const vlmProvider = resolveVlmProvider(env.vlmProvider);
+    const defaults = getVlmDefaults(vlmProvider);
+    return {
+      vlmProvider,
+      vlmBaseUrl: env.vlmBaseUrl || defaults.vlmBaseUrl,
+      vlmApiKey: env.vlmApiKey || '',
+      vlmModelName: env.vlmModelName || defaults.vlmModelName,
+      useResponsesApi: defaults.useResponsesApi,
+    };
+  })(),
   maxLoopCount: 100,
   loopIntervalInMs: 1000,
   searchEngineForBrowser: SearchEngineForSettings.GOOGLE,

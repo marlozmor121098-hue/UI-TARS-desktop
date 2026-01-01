@@ -69,7 +69,9 @@ export const FreeTrialDialog = memo(
                   checked={dontShowAgain}
                   onCheckedChange={onCheck}
                 />
-                <Label htmlFor="free">I agree. Don't show this again</Label>
+                <Label htmlFor="free">
+                  I agree. Don&apos;t show this again
+                </Label>
               </div>
             </div>
           </AlertDialogHeader>

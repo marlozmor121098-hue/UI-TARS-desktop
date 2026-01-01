@@ -8,8 +8,8 @@ import { DEFAULT_CONTEXT } from '../constants';
 const isBrowser: boolean =
   typeof window !== 'undefined' && typeof window.document !== 'undefined';
 
-// @ts-ignore
-const _globalThis: any = isBrowser ? window : global;
+const _globalThis = (isBrowser ? window : globalThis) as typeof globalThis &
+  Record<symbol, unknown>;
 
 const GLOBAL_CONTEXT_KEY = Symbol.for('@ui-tars/sdk/context');
 

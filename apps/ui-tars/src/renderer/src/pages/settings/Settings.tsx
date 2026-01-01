@@ -11,7 +11,11 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { api } from '@renderer/api';
-import { SearchEngineForSettings, VLMProviderV2 } from '@main/store/types';
+import {
+  getVlmDefaults,
+  SearchEngineForSettings,
+  VLMProviderV2,
+} from '@main/store/types';
 import { useSetting } from '@renderer/hooks/useSetting';
 import { Button } from '@renderer/components/ui/button';
 import {
@@ -115,13 +119,15 @@ export default function Settings() {
 
   console.log('initialValues', settings);
 
+  const geminiDefaults = getVlmDefaults(VLMProviderV2.gemini);
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       language: 'en',
-      vlmBaseUrl: '',
+      vlmProvider: geminiDefaults.vlmProvider,
+      vlmBaseUrl: geminiDefaults.vlmBaseUrl,
       vlmApiKey: '',
-      vlmModelName: '',
+      vlmModelName: geminiDefaults.vlmModelName,
       maxLoopCount: 100,
       loopIntervalInMs: 1000,
       reportStorageBaseUrl: '',
@@ -146,6 +152,32 @@ export default function Settings() {
       });
     }
   }, [settings, form]);
+
+  const [vlmProvider, vlmBaseUrl, vlmModelName] = form.watch([
+    'vlmProvider',
+    'vlmBaseUrl',
+    'vlmModelName',
+  ]);
+  useEffect(() => {
+    if (isRemoteAutoUpdatedPreset) {
+      return;
+    }
+    if (vlmProvider === VLMProviderV2.gemini) {
+      const defaults = getVlmDefaults(vlmProvider);
+      if (!vlmBaseUrl) {
+        form.setValue('vlmBaseUrl', defaults.vlmBaseUrl, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+      if (!vlmModelName) {
+        form.setValue('vlmModelName', defaults.vlmModelName, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+    }
+  }, [form, isRemoteAutoUpdatedPreset, vlmBaseUrl, vlmModelName, vlmProvider]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(

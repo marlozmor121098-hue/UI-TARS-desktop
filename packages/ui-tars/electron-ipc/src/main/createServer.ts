@@ -9,7 +9,7 @@ export const createServer = <Router extends RouterType>(router: Router) => {
   return new Proxy<ServerFromRouter<Router>>({} as ServerFromRouter<Router>, {
     get: (_, prop: string) => {
       const route = router[prop];
-      return (input: any, sender?: WebContents) => {
+      return (input: unknown, sender?: WebContents) => {
         return route.handle({ context: { sender: sender || null }, input });
       };
     },

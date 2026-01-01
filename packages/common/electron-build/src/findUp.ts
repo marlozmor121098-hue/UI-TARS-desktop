@@ -43,7 +43,9 @@ export async function findUp(
       ) {
         return filePath;
       }
-    } catch {}
+    } catch (error) {
+      void error;
+    }
 
     if (directory === stopAt || directory === root) {
       break;
@@ -74,7 +76,9 @@ export function findUpSync(
       ) {
         return filePath;
       }
-    } catch {}
+    } catch (error) {
+      void error;
+    }
 
     if (directory === stopAt || directory === root) {
       break;

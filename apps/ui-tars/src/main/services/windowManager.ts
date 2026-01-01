@@ -29,7 +29,7 @@ class WindowManager {
     });
   }
 
-  broadcast(channel: string, data: any) {
+  broadcast(channel: string, data: unknown) {
     this.windows.forEach((window) => {
       if (!window.isDestroyed()) {
         window.webContents.send(channel, data);

@@ -113,11 +113,20 @@ export class UITarsModel extends Model {
       ...restOptions
     } = this.modelConfig;
 
+    const defaultHeaders =
+      baseURL?.includes('generativelanguage.googleapis.com') && apiKey
+        ? {
+            ...(restOptions as ClientOptions).defaultHeaders,
+            'x-goog-api-key': apiKey,
+          }
+        : (restOptions as ClientOptions).defaultHeaders;
+
     const openai = new OpenAI({
       ...restOptions,
       maxRetries: 0,
       baseURL,
       apiKey,
+      defaultHeaders,
     });
 
     const createCompletionPrams: ChatCompletionCreateParamsNonStreaming = {

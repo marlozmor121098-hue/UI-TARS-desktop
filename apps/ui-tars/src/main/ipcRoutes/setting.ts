@@ -17,9 +17,15 @@ export const settingRoute = t.router({
     }>()
     .handle(async ({ input }) => {
       try {
+        const defaultHeaders = input.baseUrl.includes(
+          'generativelanguage.googleapis.com',
+        )
+          ? { 'x-goog-api-key': input.apiKey }
+          : undefined;
         const openai = new OpenAI({
           apiKey: input.apiKey,
           baseURL: input.baseUrl,
+          defaultHeaders,
         });
         const result = await openai.responses.create({
           model: input.modelName,
@@ -40,21 +46,23 @@ export const settingRoute = t.router({
       modelName: string;
     }>()
     .handle(async ({ input }) => {
-      try {
-        const openai = new OpenAI({
-          apiKey: input.apiKey,
-          baseURL: input.baseUrl,
-        });
-        const completion = await openai.chat.completions.create({
-          model: input.modelName,
-          messages: [{ role: 'user', content: 'return 1+1=?' }],
-          stream: false,
-        });
-        console.log('result', completion);
+      const defaultHeaders = input.baseUrl.includes(
+        'generativelanguage.googleapis.com',
+      )
+        ? { 'x-goog-api-key': input.apiKey }
+        : undefined;
+      const openai = new OpenAI({
+        apiKey: input.apiKey,
+        baseURL: input.baseUrl,
+        defaultHeaders,
+      });
+      const completion = await openai.chat.completions.create({
+        model: input.modelName,
+        messages: [{ role: 'user', content: 'return 1+1=?' }],
+        stream: false,
+      });
+      console.log('result', completion);
 
-        return Boolean(completion?.id || completion.choices[0].message.content);
-      } catch (e) {
-        throw e;
-      }
+      return Boolean(completion?.id || completion.choices[0].message.content);
     }),
 });

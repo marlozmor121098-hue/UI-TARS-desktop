@@ -108,7 +108,7 @@ const ChatInput = ({
 
     console.log('startRun', instructions, restUserData);
 
-    let history = chatMessages;
+    const history = chatMessages;
 
     const session = await getSession(sessionId);
     await updateSession(sessionId, {

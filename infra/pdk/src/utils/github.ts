@@ -69,7 +69,7 @@ export async function getPreviousTag(
 
     // Filter out canary releases and apply tagPrefix filter if provided
     let filteredTags = allTags.filter((tag) => !tag.includes('canary'));
-    
+
     // Apply tagPrefix filter if provided
     if (tagPrefix) {
       filteredTags = filteredTags.filter((tag) => tag.startsWith(tagPrefix));
@@ -146,12 +146,12 @@ export async function generateReleaseNotes(
       const match = commit.subject.match(/^(\w+)(\([^)]+\))?:\s*(.+)$/);
       if (match) {
         const [, type] = match;
-        
+
         // Apply scope filter if provided
         if (!shouldIncludeCommitByScope(commit.subject, filterScopes)) {
           return; // Skip this commit
         }
-        
+
         if (type in groups) {
           groups[type as keyof typeof groups].push(commit);
         } else {
@@ -257,7 +257,7 @@ export async function getRepositoryInfo(
     // Parse GitHub URL (both HTTPS and SSH)
     // HTTPS: https://github.com/owner/repo.git
     // SSH: git@github.com:owner/repo.git
-    const match = url.match(/github\.com[:\/]([^/]+)\/([^/]+?)(?:\.git)?$/);
+    const match = url.match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/);
 
     if (!match) {
       logger.warn('Could not parse GitHub repository URL');

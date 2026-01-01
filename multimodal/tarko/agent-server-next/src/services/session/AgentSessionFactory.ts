@@ -46,12 +46,12 @@ export class AgentSessionFactory {
     session: AgentSession;
     sessionInfo?: SessionInfo;
     storageUnsubscribe?: () => void;
-    events: any[]
+    events: any[];
   }> {
     const sessionId = nanoid();
     const user = getCurrentUser(c);
     const server = c.get('server');
-    
+
     // Get runtimeSettings and agentOptions from request body
     const body = await c.req.json().catch(() => ({}));
 
@@ -94,8 +94,8 @@ export class AgentSessionFactory {
           configuredAt: now,
         },
         ...(defaultModel && {
-            modelConfig: defaultModel,
-          }),
+          modelConfig: defaultModel,
+        }),
         sandboxUrl,
         // Include runtime settings if provided (persistent session settings)
         ...(runtimeSettings && {
@@ -119,14 +119,13 @@ export class AgentSessionFactory {
 
     // Initialize the session
     const { storageUnsubscribe } = await session.initialize();
-    
 
     // Wait a short time to ensure all initialization events are persisted
     // This handles the async nature of event storage during agent initialization
     await session.waitForEventSavesToComplete();
 
     // Get events that were created during agent initialization
-    let initializationEvents = await server.daoFactory.getSessionEvents(sessionId);
+    const initializationEvents = await server.daoFactory.getSessionEvents(sessionId);
 
     console.log('Return initializationEvents', initializationEvents);
 
@@ -151,7 +150,7 @@ export class AgentSessionFactory {
       }
 
       // Reallocate sandbox if scheduler is available
-      let old_sandboxUrl = sessionInfo.metadata?.sandboxUrl;
+      const old_sandboxUrl = sessionInfo.metadata?.sandboxUrl;
       const userId = sessionInfo.userId;
 
       if (this.sandboxScheduler && userId) {
@@ -214,7 +213,13 @@ export class AgentSessionFactory {
   }): AgentSession {
     const { sessionInfo, agioProvider, agentOptions } = options;
 
-    const session = new AgentSession(this.server, sessionInfo.id, agioProvider, sessionInfo, agentOptions);
+    const session = new AgentSession(
+      this.server,
+      sessionInfo.id,
+      agioProvider,
+      sessionInfo,
+      agentOptions,
+    );
 
     return session;
   }

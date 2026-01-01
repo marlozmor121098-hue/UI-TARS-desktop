@@ -30,6 +30,13 @@ import {
 
 const hrefRegExp = /\/tag\/([^/]+)$/;
 
+const formatError = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.stack || error.message;
+  }
+  return String(error);
+};
+
 interface GithubUpdateInfo extends UpdateInfo {
   tag: string;
 }
@@ -132,9 +139,9 @@ export class CustomGitHubProvider extends BaseGitHubProvider<GithubUpdateInfo> {
           }
         }
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       throw newError(
-        `Cannot parse releases feed: ${e.stack || e.message},\nXML:\n${feedXml}`,
+        `Cannot parse releases feed: ${formatError(e)},\nXML:\n${feedXml}`,
         'ERR_UPDATER_INVALID_RELEASE_FEED',
       );
     }
@@ -148,7 +155,7 @@ export class CustomGitHubProvider extends BaseGitHubProvider<GithubUpdateInfo> {
 
     let rawData: string;
     let channelFile = '';
-    let channelFileUrl: any = '';
+    let channelFileUrl: URL | undefined;
     const fetchData = async (channelName: string) => {
       channelFile = getChannelFilename(channelName);
       channelFileUrl = newUrlFromBase(
@@ -161,10 +168,10 @@ export class CustomGitHubProvider extends BaseGitHubProvider<GithubUpdateInfo> {
           requestOptions,
           cancellationToken,
         ))!;
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (e instanceof HttpError && e.statusCode === 404) {
           throw newError(
-            `Cannot find ${channelFile} in the latest release artifacts (${channelFileUrl}): ${e.stack || e.message}`,
+            `Cannot find ${channelFile} in the latest release artifacts (${channelFileUrl}): ${formatError(e)}`,
             'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND',
           );
         }
@@ -180,13 +187,20 @@ export class CustomGitHubProvider extends BaseGitHubProvider<GithubUpdateInfo> {
         );
       }
       rawData = await fetchData(channel);
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (this.updater.allowPrerelease) {
         // Allow fallback to `latest.yml`
         rawData = await fetchData(this.getDefaultChannelName());
       } else {
         throw e;
       }
+    }
+
+    if (!channelFileUrl) {
+      throw newError(
+        `Cannot resolve channel file url for ${channelFile}`,
+        'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND',
+      );
     }
 
     const result = parseUpdateInfo(rawData, channelFile, channelFileUrl);
@@ -211,7 +225,7 @@ export class CustomGitHubProvider extends BaseGitHubProvider<GithubUpdateInfo> {
             feed,
             latestRelease,
           );
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('Error fetching release info', e);
         result.releaseName = tag;
         result.releaseNotes = '';
@@ -248,9 +262,9 @@ export class CustomGitHubProvider extends BaseGitHubProvider<GithubUpdateInfo> {
 
       const releaseInfo: GithubReleaseInfo = JSON.parse(rawData);
       return releaseInfo.tag_name;
-    } catch (e: any) {
+    } catch (e: unknown) {
       throw newError(
-        `Unable to find latest version on GitHub (${url}), please ensure a production release exists: ${e.stack || e.message}`,
+        `Unable to find latest version on GitHub (${url}), please ensure a production release exists: ${formatError(e)}`,
         'ERR_UPDATER_LATEST_VERSION_NOT_FOUND',
       );
     }
@@ -286,7 +300,7 @@ export function computeReleaseNotes(
   currentVersion: semver.SemVer,
   isFullChangelog: boolean,
   feed: XElement,
-  latestRelease: any,
+  latestRelease: XElement,
 ): string | Array<ReleaseNoteInfo> | null {
   if (!isFullChangelog) {
     return getNoteValue(latestRelease);

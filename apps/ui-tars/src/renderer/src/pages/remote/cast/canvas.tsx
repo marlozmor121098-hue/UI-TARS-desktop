@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { throttle } from 'lodash-es';
-import type { Page } from 'puppeteer-core';
-import { connect } from 'puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js';
+import * as puppeteer from 'puppeteer-core';
+import type { CDPSession, Page, Target } from 'puppeteer-core';
 import { RemoteResourceStatus } from '@renderer/hooks/useRemoteResource';
 import { StatusIndicator } from './status';
 
@@ -29,15 +29,15 @@ export const CDPBrowser: React.FC<CDPBrowserProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<Page | null>(null);
-  const clientRef = useRef<any>(null);
-  const browserRef = useRef<any>(null);
+  const clientRef = useRef<CDPSession | null>(null);
+  const browserRef = useRef<puppeteer.Browser | null>(null);
   const [viewportSize, setViewportSize] = useState<{
     width: number;
     height: number;
   } | null>(null);
   const [isFocused, setIsFocused] = useState(false);
 
-  const getModifiersForEvent = (event: any) =>
+  const getModifiersForEvent = (event: MouseEvent | WheelEvent) =>
     (event.altKey ? 1 : 0) |
     (event.ctrlKey ? 2 : 0) |
     (event.metaKey ? 4 : 0) |
@@ -67,13 +67,18 @@ export const CDPBrowser: React.FC<CDPBrowserProps> = ({
         })
         .catch(console.error);
     } else if (event instanceof MouseEvent) {
-      const buttons = { 0: 'none', 1: 'left', 2: 'middle', 3: 'right' };
+      const buttons: Record<number, 'none' | 'left' | 'middle' | 'right'> = {
+        0: 'none',
+        1: 'left',
+        2: 'middle',
+        3: 'right',
+      };
       const eventType = event.type;
       const mouseEventMap = {
         mousedown: 'mousePressed',
         mouseup: 'mouseReleased',
         mousemove: 'mouseMoved',
-      };
+      } as const;
       const type = mouseEventMap[eventType as keyof typeof mouseEventMap];
       if (!type) {
         return;
@@ -83,7 +88,7 @@ export const CDPBrowser: React.FC<CDPBrowserProps> = ({
           type,
           x,
           y,
-          button: (buttons as any)[event.which],
+          button: buttons[event.which] ?? 'none',
           modifiers: getModifiersForEvent(event),
           clickCount: 1,
         })
@@ -103,16 +108,21 @@ export const CDPBrowser: React.FC<CDPBrowserProps> = ({
         keydown: 'keyDown',
         keyup: 'keyUp',
         keypress: 'char',
-      };
+      } as const;
       const type = eventTypeMap[event.type as keyof typeof eventTypeMap];
+      if (!type) {
+        return;
+      }
       const text =
         type === 'char' ? String.fromCharCode(event.charCode) : undefined;
+      const keyIdentifier = (event as unknown as { keyIdentifier?: string })
+        .keyIdentifier;
       clientRef.current
         .send('Input.dispatchKeyEvent', {
           type,
           text,
           unmodifiedText: text ? text.toLowerCase() : undefined,
-          keyIdentifier: (event as any).keyIdentifier,
+          keyIdentifier,
           code: event.code,
           key: event.key,
           windowsVirtualKeyCode: event.keyCode,
@@ -188,10 +198,8 @@ export const CDPBrowser: React.FC<CDPBrowserProps> = ({
   }, [viewportSize?.width, throttledUpdateCanvasSize]);
 
   const initPuppeteer = async (endpoint: string) => {
-    let browser: any;
-    let client: any;
     try {
-      browser = await connect({
+      const browser = await puppeteer.connect({
         browserWSEndpoint: endpoint,
         defaultViewport: {
           width: 1280,
@@ -240,6 +248,7 @@ export const CDPBrowser: React.FC<CDPBrowserProps> = ({
 
         clientRef.current?.off('Page.screencastFrame');
         await clientRef.current?.send('Page.stopScreencast').catch(() => {});
+        let client: CDPSession;
         try {
           client = await page.createCDPSession();
         } catch (cdpError) {
@@ -300,19 +309,22 @@ export const CDPBrowser: React.FC<CDPBrowserProps> = ({
             }
           },
         );
-        client.on('error', (err: any) => {
+        client.on('error', (err: unknown) => {
           console.error('client.on', err);
         });
         client.on('disconnect', () => {});
       };
 
-      const handleTarget = async (target: any) => {
+      const handleTarget = async (target: Target) => {
         if (target.type() !== 'page') {
           return;
         }
 
         try {
-          const newPage = (await target.page()) as Page;
+          const newPage = (await target.page()) as Page | null;
+          if (!newPage) {
+            return;
+          }
 
           console.log('newPage url', newPage.url());
 
@@ -376,12 +388,13 @@ export const CDPBrowser: React.FC<CDPBrowserProps> = ({
   };
 
   useEffect(() => {
-    if (!VLMError || !browserRef.current) {
+    const browser = browserRef.current;
+    if (!VLMError || !browser) {
       return;
     }
 
     const fallbackToToutiao = async () => {
-      const pages = await browserRef.current.pages();
+      const pages = await browser.pages();
 
       pages.forEach((page) => {
         page.goto('https://www.toutiao.com/');

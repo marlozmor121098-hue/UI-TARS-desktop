@@ -8,7 +8,7 @@
   "author": "ByteDance",
   "scripts": {
     "format": "prettier --write .",
-    "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
+    "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path ../../.eslintignore",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --pretty --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --pretty --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
@@ -20,7 +20,7 @@
     "asar:analyze": "asar extract out/UI\\ TARS-darwin-arm64/UI\\ TARS.app/Contents/Resources/app.asar ./dist/asar",
     "package": "electron-forge package",
     "clean": "rimraf dist out",
-    "test": "vitest",
+    "test": "vitest run",
     "test:bench": "vitest bench",
     "coverage": "vitest run --coverage",
     "build:e2e": "npm run build:dist && cross-env CI=e2e npm run package",

@@ -10,6 +10,8 @@ import { Walker, DepType } from 'flora-colossus';
 import { dirname } from 'path';
 import { findUpSync } from './findUp';
 
+type WalkerModule = { name: string; path: string; nativeModuleType?: DepType };
+
 export const getModuleRoot = (cwd: string, pkgName: string): string => {
   let moduleEntryPath;
   try {
@@ -91,12 +93,14 @@ export async function getExternalPkgsDependencies(
       // These are private so it's quite nasty!
       // @ts-ignore
       walker.modules = [];
+
       // @ts-ignore
       await walker.walkDependenciesForModule(moduleRoot, DepType.PROD);
       // @ts-ignore
-      walker.modules
-        .filter((dep: any) => dep.nativeModuleType === DepType.PROD)
-        .forEach((dep: any) =>
+      const modules = walker.modules as unknown as WalkerModule[];
+      modules
+        .filter((dep) => dep.nativeModuleType === DepType.PROD)
+        .forEach((dep) =>
           dependenciesMap.set(dep.name, {
             name: dep.name,
             path: dep.path,

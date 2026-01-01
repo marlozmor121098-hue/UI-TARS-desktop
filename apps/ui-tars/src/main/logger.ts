@@ -8,17 +8,24 @@ import { BrowserWindow, app, dialog, shell } from 'electron';
 import log from 'electron-log';
 
 export const logger = log.scope('main');
-log.initialize();
+const isVitest = !!process.env.VITEST;
 
-log.transports.file.level =
-  process.env.NODE_ENV === 'development' ? 'debug' : 'info';
-log.transports.file.maxSize = 5 * 1024 * 1024; // 5MB
-log.transports.file.format = '[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] {text}';
-log.transports.file.archiveLogFn = (file) => {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const newPath = `${file.path}.${timestamp}`;
-  fs.renameSync(file.path, newPath);
-};
+if (!isVitest) {
+  log.initialize();
+  log.transports.file.level =
+    process.env.NODE_ENV === 'development' ? 'debug' : 'info';
+  log.transports.file.maxSize = 5 * 1024 * 1024; // 5MB
+  log.transports.file.format =
+    '[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] {text}';
+  log.transports.file.archiveLogFn = (file) => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const newPath = `${file.path}.${timestamp}`;
+    fs.renameSync(file.path, newPath);
+  };
+} else {
+  log.transports.console.level = 'info';
+  log.transports.file.level = false;
+}
 
 const MAX_LOG_FILES = 5;
 
@@ -111,13 +118,14 @@ export async function exportLogs() {
   }
 }
 
-app.on('before-quit', () => {
-  // Remove the clearLogs call from app.on('before-quit')
-  // clearLogs();
-  log.transports.console.level = false;
-});
+if (!isVitest) {
+  app.on('before-quit', () => {
+    // Remove the clearLogs call from app.on('before-quit')
+    // clearLogs();
+    log.transports.console.level = false;
+  });
 
-// Call cleanupOldLogs() when the app starts
-cleanupOldLogs().catch((error) => {
-  logger.error('Failed to cleanup logs on startup:', error);
-});
+  cleanupOldLogs().catch((error) => {
+    logger.error('Failed to cleanup logs on startup:', error);
+  });
+}

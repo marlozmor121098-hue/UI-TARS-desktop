@@ -42,11 +42,30 @@ export enum VlmProvider {
 }
 
 export enum VLMProviderV2 {
+  gemini = 'Gemini',
   ui_tars_1_0 = 'Hugging Face for UI-TARS-1.0',
   ui_tars_1_5 = 'Hugging Face for UI-TARS-1.5',
   doubao_1_5 = 'VolcEngine Ark for Doubao-1.5-UI-TARS',
   doubao_1_5_vl = 'VolcEngine Ark for Doubao-1.5-thinking-vision-pro',
 }
+
+export const getVlmDefaults = (provider?: VLMProviderV2) => {
+  if (provider === VLMProviderV2.gemini) {
+    return {
+      vlmProvider: VLMProviderV2.gemini,
+      vlmBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+      vlmModelName: 'gemini-1.5-flash',
+      useResponsesApi: false,
+    };
+  }
+
+  return {
+    vlmProvider: provider,
+    vlmBaseUrl: '',
+    vlmModelName: '',
+    useResponsesApi: false,
+  };
+};
 
 export enum SearchEngineForSettings {
   GOOGLE = 'google',

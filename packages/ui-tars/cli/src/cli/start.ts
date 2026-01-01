@@ -19,6 +19,13 @@ export interface CliOptions {
   target?: string;
   query?: string;
 }
+
+type PresetYaml = {
+  vlmApiKey?: string;
+  vlmBaseUrl?: string;
+  vlmModelName?: string;
+  useResponsesApi?: boolean;
+};
 export const start = async (options: CliOptions) => {
   const CONFIG_PATH = path.join(os.homedir(), '.ui-tars-cli.json');
 
@@ -37,7 +44,7 @@ export const start = async (options: CliOptions) => {
     }
 
     const yamlText = await response.text();
-    const preset = yaml.load(yamlText) as any;
+    const preset = yaml.load(yamlText) as PresetYaml | undefined;
 
     config.apiKey = preset?.vlmApiKey;
     config.baseURL = preset?.vlmBaseUrl;

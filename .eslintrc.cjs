@@ -10,6 +10,35 @@ module.exports = {
     '@electron-toolkit/eslint-config-ts/recommended',
     '@electron-toolkit/eslint-config-prettier',
   ],
+  settings: {
+    react: {
+      version: 'detect',
+    },
+  },
+  overrides: [
+    {
+      files: [
+        'packages/ui-tars/visualizer/**/*.{ts,tsx,cts,mts,js,jsx,cjs,mjs}',
+      ],
+      rules: {
+        '@typescript-eslint/no-explicit-any': 'off',
+        '@typescript-eslint/no-non-null-asserted-optional-chain': 'off',
+        'no-useless-escape': 'off',
+        'no-empty': 'off',
+      },
+    },
+    {
+      files: [
+        '**/*.{test,spec}.{ts,tsx,cts,mts,js,jsx,cjs,mjs}',
+        '**/test/**/*.{ts,tsx,cts,mts,js,jsx,cjs,mjs}',
+        '**/tests/**/*.{ts,tsx,cts,mts,js,jsx,cjs,mjs}',
+        '**/fixtures/**/*.{ts,tsx,cts,mts,js,jsx,cjs,mjs}',
+      ],
+      rules: {
+        '@typescript-eslint/no-explicit-any': 'off',
+      },
+    },
+  ],
   rules: {
     '@typescript-eslint/no-unused-vars': 'off',
     '@typescript-eslint/explicit-function-return-type': 'off',

@@ -58,8 +58,20 @@ const loadDevDebugTools = async () => {
 
   import('electron-devtools-installer')
     .then(({ default: installExtensionDefault, REACT_DEVELOPER_TOOLS }) => {
-      // @ts-ignore
-      const installExtension = installExtensionDefault?.default;
+      const installExtension =
+        typeof installExtensionDefault === 'function'
+          ? installExtensionDefault
+          : // @ts-expect-error support CJS-wrapped default export
+            typeof installExtensionDefault?.default === 'function'
+            ? // @ts-expect-error support CJS-wrapped default export
+              installExtensionDefault.default
+            : null;
+
+      if (!installExtension) {
+        logger.warn('Devtools installer not available');
+        return;
+      }
+
       const extensions = [installExtension(REACT_DEVELOPER_TOOLS)];
 
       return Promise.all(extensions)

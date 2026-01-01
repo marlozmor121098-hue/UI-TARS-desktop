@@ -12,7 +12,7 @@ describe.skip('LLMProcessor Thinking Events', () => {
   let mockLLMClient: OpenAI;
 
   // Helper to create mock client with reasoning content
-  const createReasoningMockClient = (streamingMode: boolean = true) => {
+  const createReasoningMockClient = (streamingMode = true) => {
     return {
       chat: {
         completions: {

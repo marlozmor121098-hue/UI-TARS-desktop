@@ -138,7 +138,7 @@ export function generatePageTitle(pageTitle?: string): string {
 /**
  * Truncate description to optimal length for meta tags
  */
-export function optimizeDescription(description: string, maxLength: number = 155): string {
+export function optimizeDescription(description: string, maxLength = 155): string {
   if (description.length <= maxLength) {
     return description;
   }

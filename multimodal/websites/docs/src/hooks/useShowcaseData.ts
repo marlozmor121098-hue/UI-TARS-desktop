@@ -45,7 +45,11 @@ export function useShowcaseData({
 
       if (!sessionId && !slug) {
         // Use build-time data for public shares
-        setApiItems(showcaseData.length > 0 ? showcaseData : await shareAPI.getPublicShares(1, 100).then(r => r.data));
+        setApiItems(
+          showcaseData.length > 0
+            ? showcaseData
+            : await shareAPI.getPublicShares(1, 100).then((r) => r.data),
+        );
       } else if (sessionId) {
         const response = await shareAPI.getShare(sessionId);
         setApiItems(response.success ? [response.data] : []);

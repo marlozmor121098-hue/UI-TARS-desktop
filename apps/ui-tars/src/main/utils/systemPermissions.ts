@@ -2,18 +2,28 @@
  * Copyright (c) 2025 Bytedance, Inc. and its affiliates.
  * SPDX-License-Identifier: Apache-2.0
  */
-import {
-  hasPromptedForPermission,
-  hasScreenCapturePermission,
-  openSystemPreferences,
-} from '@computer-use/mac-screen-capture-permissions';
-import permissions from '@computer-use/node-mac-permissions';
+import { createRequire } from 'node:module';
 
 import * as env from '@main/env';
 import { logger } from '@main/logger';
 
 let hasScreenRecordingPermission = false;
 let hasAccessibilityPermission = false;
+
+const require = createRequire(import.meta.url);
+type MacScreenCapturePermissions =
+  typeof import('@computer-use/mac-screen-capture-permissions');
+type MacPermissionsApi = typeof import('@computer-use/node-mac-permissions');
+
+const macScreenCapturePermissions: MacScreenCapturePermissions | null =
+  process.platform === 'darwin'
+    ? (require('@computer-use/mac-screen-capture-permissions') as MacScreenCapturePermissions)
+    : null;
+
+const macPermissions: MacPermissionsApi | null =
+  process.platform === 'darwin'
+    ? (require('@computer-use/node-mac-permissions') as MacPermissionsApi)
+    : null;
 
 const wrapWithWarning =
   (message, nativeFunction) =>
@@ -22,7 +32,11 @@ const wrapWithWarning =
     return nativeFunction(...args);
   };
 
-const askForAccessibility = (nativeFunction, functionName) => {
+const askForAccessibility = (
+  permissions: MacPermissionsApi,
+  nativeFunction,
+  functionName,
+) => {
   const accessibilityStatus = permissions.getAuthStatus('accessibility');
   logger.info('[accessibilityStatus]', accessibilityStatus);
 
@@ -41,7 +55,11 @@ const askForAccessibility = (nativeFunction, functionName) => {
     );
   }
 };
-const askForScreenRecording = (nativeFunction, functionName) => {
+const askForScreenRecording = (
+  permissions: MacPermissionsApi,
+  nativeFunction,
+  functionName,
+) => {
   const screenCaptureStatus = permissions.getAuthStatus('screen');
 
   if (screenCaptureStatus === 'authorized') {
@@ -71,6 +89,28 @@ export const ensurePermissions = (): {
     };
   }
 
+  if (process.platform !== 'darwin') {
+    return {
+      screenCapture: true,
+      accessibility: true,
+    };
+  }
+
+  if (!macScreenCapturePermissions || !macPermissions) {
+    return {
+      screenCapture: false,
+      accessibility: false,
+    };
+  }
+
+  const {
+    hasPromptedForPermission,
+    hasScreenCapturePermission,
+    openSystemPreferences,
+  } = macScreenCapturePermissions;
+
+  const permissions = macPermissions;
+
   logger.info('Has asked permissions?', hasPromptedForPermission());
 
   hasScreenRecordingPermission = hasScreenCapturePermission();
@@ -81,8 +121,8 @@ export const ensurePermissions = (): {
     openSystemPreferences();
   }
 
-  askForAccessibility(() => {}, 'execute accessibility');
-  askForScreenRecording(() => {}, 'execute screen recording');
+  askForAccessibility(permissions, () => {}, 'execute accessibility');
+  askForScreenRecording(permissions, () => {}, 'execute screen recording');
 
   logger.info(
     '[ensurePermissions] hasScreenRecordingPermission',

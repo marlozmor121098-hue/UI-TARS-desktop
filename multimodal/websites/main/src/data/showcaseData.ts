@@ -204,7 +204,7 @@ export const sortItemsByDate = (items: ShowcaseItem[]): ShowcaseItem[] => {
 };
 
 // Helper function to check if an item was published within the last N days
-export const isRecentlyPublished = (item: ShowcaseItem, days: number = 3): boolean => {
+export const isRecentlyPublished = (item: ShowcaseItem, days = 3): boolean => {
   if (!item.date) return false;
 
   const publishDate = new Date(item.date);

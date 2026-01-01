@@ -111,25 +111,17 @@ describe('Integration Tests', () => {
   describe('Claude Headers Integration', () => {
     it('should automatically add Claude headers when resolving Claude models', () => {
       // Test with Claude model
-      const claudeModel = resolveModel(
-        undefined,
-        'claude-3-sonnet',
-        'anthropic'
-      );
-      
+      const claudeModel = resolveModel(undefined, 'claude-3-sonnet', 'anthropic');
+
       expect(claudeModel.headers?.['anthropic-beta']).toBe(
-        'fine-grained-tool-streaming-2025-05-14,token-efficient-tools-2025-02-19'
+        'fine-grained-tool-streaming-2025-05-14,token-efficient-tools-2025-02-19',
       );
     });
 
     it('should not add Claude headers for non-Claude models', () => {
       // Test with non-Claude model
-      const openaiModel = resolveModel(
-        undefined,
-        'gpt-4',
-        'openai'
-      );
-      
+      const openaiModel = resolveModel(undefined, 'gpt-4', 'openai');
+
       expect(openaiModel.headers?.['anthropic-beta']).toBeUndefined();
     });
 
@@ -139,14 +131,14 @@ describe('Integration Tests', () => {
         provider: 'anthropic',
         headers: {
           'X-Custom': 'value',
-          'Authorization': 'Bearer token'
-        }
+          Authorization: 'Bearer token',
+        },
       });
-      
+
       expect(customModel.headers?.['X-Custom']).toBe('value');
       expect(customModel.headers?.['Authorization']).toBe('Bearer token');
       expect(customModel.headers?.['anthropic-beta']).toBe(
-        'fine-grained-tool-streaming-2025-05-14,token-efficient-tools-2025-02-19'
+        'fine-grained-tool-streaming-2025-05-14,token-efficient-tools-2025-02-19',
       );
     });
 
@@ -155,13 +147,13 @@ describe('Integration Tests', () => {
         'claude-3-sonnet',
         'claude-3-5-sonnet-20241022',
         'claude-3-haiku',
-        'anthropic/claude-3-opus'
+        'anthropic/claude-3-opus',
       ];
-      
-      models.forEach(modelId => {
+
+      models.forEach((modelId) => {
         const model = resolveModel(undefined, modelId, 'anthropic');
         expect(model.headers?.['anthropic-beta']).toBe(
-          'fine-grained-tool-streaming-2025-05-14,token-efficient-tools-2025-02-19'
+          'fine-grained-tool-streaming-2025-05-14,token-efficient-tools-2025-02-19',
         );
       });
     });

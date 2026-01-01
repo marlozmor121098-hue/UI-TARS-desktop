@@ -2,14 +2,14 @@
  * Copyright (c) 2025 Bytedance, Inc. and its affiliates.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useEffect, useState, useImperativeHandle } from 'react';
+import { useEffect, useState, useImperativeHandle, useRef } from 'react';
 import { CheckCircle, XCircle, Loader2, EyeOff, Eye } from 'lucide-react';
 import * as z from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
-import { VLMProviderV2 } from '@main/store/types';
+import { getVlmDefaults, VLMProviderV2 } from '@main/store/types';
 import { useSetting } from '@renderer/hooks/useSetting';
 import { Button } from '@renderer/components/ui/button';
 import {
@@ -72,14 +72,15 @@ export function VLMSettings({
     settings?.presetSource?.type === 'remote' &&
     settings.presetSource.autoUpdate;
 
+  const geminiDefaults = getVlmDefaults(VLMProviderV2.gemini);
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      vlmProvider: undefined,
-      vlmBaseUrl: '',
+      vlmProvider: geminiDefaults.vlmProvider,
+      vlmBaseUrl: geminiDefaults.vlmBaseUrl,
       vlmApiKey: '',
-      vlmModelName: '',
-      useResponsesApi: false,
+      vlmModelName: geminiDefaults.vlmModelName,
+      useResponsesApi: geminiDefaults.useResponsesApi,
     },
   });
   useEffect(() => {
@@ -102,6 +103,49 @@ export function VLMSettings({
       'vlmModelName',
       'useResponsesApi',
     ]);
+
+  const prevProviderRef = useRef<VLMProviderV2 | undefined>(undefined);
+  useEffect(() => {
+    if (isRemoteAutoUpdatedPreset) {
+      prevProviderRef.current = newProvider;
+      return;
+    }
+    if (!newProvider) {
+      prevProviderRef.current = newProvider;
+      return;
+    }
+
+    if (newProvider === VLMProviderV2.gemini) {
+      const defaults = getVlmDefaults(newProvider);
+      if (!newBaseUrl) {
+        form.setValue('vlmBaseUrl', defaults.vlmBaseUrl, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+      if (!newModelName) {
+        form.setValue('vlmModelName', defaults.vlmModelName, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+      if (newUseResponsesApi && defaults.useResponsesApi === false) {
+        form.setValue('useResponsesApi', false, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+    }
+
+    prevProviderRef.current = newProvider;
+  }, [
+    form,
+    isRemoteAutoUpdatedPreset,
+    newBaseUrl,
+    newModelName,
+    newProvider,
+    newUseResponsesApi,
+  ]);
 
   useEffect(() => {
     if (!autoSave) {

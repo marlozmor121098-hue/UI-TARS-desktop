@@ -3,14 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { describe, it, expect } from 'vitest';
-import { VLMProviderV2 } from './types';
+import { getVlmDefaults, VLMProviderV2 } from './types';
 
 describe('VLMProviderV2', () => {
   it('should have correct values for each provider', () => {
     const cases = [
+      [VLMProviderV2.gemini, 'Gemini'],
       [VLMProviderV2.ui_tars_1_0, 'Hugging Face for UI-TARS-1.0'],
       [VLMProviderV2.ui_tars_1_5, 'Hugging Face for UI-TARS-1.5'],
       [VLMProviderV2.doubao_1_5, 'VolcEngine Ark for Doubao-1.5-UI-TARS'],
+      [
+        VLMProviderV2.doubao_1_5_vl,
+        'VolcEngine Ark for Doubao-1.5-thinking-vision-pro',
+      ],
     ];
 
     cases.forEach(([provider, expected]) => {
@@ -23,8 +28,19 @@ describe('VLMProviderV2', () => {
     );
   });
 
-  it('should contain exactly three providers', () => {
+  it('should contain exactly five providers', () => {
     const providerCount = Object.keys(VLMProviderV2).length;
-    expect(providerCount).toBe(3);
+    expect(providerCount).toBe(5);
+  });
+});
+
+describe('getVlmDefaults', () => {
+  it('should provide Gemini defaults compatible with OpenAI-style endpoint', () => {
+    expect(getVlmDefaults(VLMProviderV2.gemini)).toEqual({
+      vlmProvider: VLMProviderV2.gemini,
+      vlmBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+      vlmModelName: 'gemini-1.5-flash',
+      useResponsesApi: false,
+    });
   });
 });

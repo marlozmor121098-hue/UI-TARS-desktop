@@ -242,7 +242,7 @@ function sortItemsByDate(items: ShowcaseItem[]): ShowcaseItem[] {
 /**
  * Check if item is recently published
  */
-export function isRecentlyPublished(item: ShowcaseItem, days: number = 3): boolean {
+export function isRecentlyPublished(item: ShowcaseItem, days = 3): boolean {
   if (!item.date) return false;
 
   const publishDate = new Date(item.date);

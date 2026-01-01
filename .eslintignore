@@ -2,3 +2,7 @@ node_modules
 dist
 out
 .gitignore
+docs
+examples
+multimodal
+packages/agent-infra

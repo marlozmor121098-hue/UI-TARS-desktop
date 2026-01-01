@@ -12,7 +12,7 @@ export class Memory {
   private messages: Message[];
   private readonly maxMessages: number;
 
-  constructor(messages: Message[] = [], maxMessages: number = 100) {
+  constructor(messages: Message[] = [], maxMessages = 100) {
     this.messages = messages;
 
     this.maxMessages = maxMessages;

@@ -146,7 +146,7 @@ export class Message {
    */
   static fromToolCalls(
     tool_calls: ToolCall[],
-    content: string = '',
+    content = '',
     kwargs: Record<string, any> = {},
   ): Message {
     const formattedCalls = tool_calls.map((call) => ({

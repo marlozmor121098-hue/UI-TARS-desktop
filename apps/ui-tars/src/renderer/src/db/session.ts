@@ -9,7 +9,7 @@ import { Operator } from '@main/store/types';
 // Session 相关的类型定义
 export interface SessionMetaInfo {
   operator: Operator;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface SessionItem {
