@@ -53,8 +53,8 @@ export const getVlmDefaults = (provider?: VLMProviderV2) => {
   if (provider === VLMProviderV2.gemini) {
     return {
       vlmProvider: VLMProviderV2.gemini,
-      vlmBaseUrl: 'https://generativelanguage.googleapis.com/v1/openai/',
-      vlmModelName: 'gemini-2.5-flash-native-audio-preview',
+      vlmBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+      vlmModelName: 'gemini-2.0-flash', // Most stable free VLM model
       useResponsesApi: false,
     };
   }

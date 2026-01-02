@@ -319,11 +319,24 @@ export class GUIAgent<T extends Operator> extends BaseGUIAgent<
         if (!prediction || prediction.trim().length === 0) {
           logger.error('[GUIAgent] Response Empty');
           
-          // If we get an empty response, especially with Gemini, try to nudge it
           if (this.model.isGemini) {
-            logger.info('[GUIAgent] Gemini returned empty response, retrying with nudge...');
-            // We can't easily "retry with nudge" here without changing the history,
-            // but we can at least log it and let the loop retry naturally if maxRetries > 0.
+            logger.info('[GUIAgent] Gemini returned empty response, injecting nudge message...');
+            // Add a nudge message to history to force model to respond
+            data.conversations.push({
+              from: 'human',
+              value: 'The previous response was empty. Please provide a valid action in the required format (e.g., click, type, navigate, finish).',
+              timing: {
+                start: Date.now(),
+                end: Date.now(),
+                cost: 0,
+              }
+            });
+            await onData?.({
+              data: {
+                ...data,
+                conversations: data.conversations.slice(-1),
+              },
+            });
           }
           continue;
         }
