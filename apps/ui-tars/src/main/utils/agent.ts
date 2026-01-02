@@ -31,24 +31,20 @@ export const normalizeGeminiModelName = (modelName: string) => {
 export const normalizeGeminiOpenAIBaseUrl = (baseUrl: string) => {
   let normalized = baseUrl.trim().replace(/^`|`$/g, '').trim();
   
-  // Force use of v1 and avoid v1beta as per user instructions
-  if (normalized.includes('v1beta')) {
-    normalized = normalized.replace('v1beta', 'v1');
-  }
-
   // Handle documentation URLs that users might accidentally paste
   if (normalized.includes('ai.google.dev') || normalized.includes('google.dev/gemini-api')) {
-    return 'https://generativelanguage.googleapis.com/v1/openai/';
+    // Note: Google's OpenAI-compatible endpoint is currently only stable in v1beta
+    return 'https://generativelanguage.googleapis.com/v1beta/openai/';
   }
 
   if (normalized.includes('generativelanguage.googleapis.com')) {
     // Only inject version if none is present
     if (!normalized.includes('/v1/') && !normalized.includes('/v1beta/')) {
       if (normalized.endsWith('/openai') || normalized.endsWith('/openai/')) {
-        normalized = normalized.replace('/openai', '/v1/openai');
+        normalized = normalized.replace('/openai', '/v1beta/openai');
       } else {
-        // Default to v1 if no version and no /openai suffix
-        normalized = normalized.endsWith('/') ? `${normalized}v1/openai/` : `${normalized}/v1/openai/`;
+        // Default to v1beta for OpenAI compatibility
+        normalized = normalized.endsWith('/') ? `${normalized}v1beta/openai/` : `${normalized}/v1beta/openai/`;
       }
     }
   }

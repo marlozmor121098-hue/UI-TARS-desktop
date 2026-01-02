@@ -124,10 +124,9 @@ export class UITarsModel extends Model {
     } = this.modelConfig;
 
     // For OpenAI-compatible endpoint, Gemini models usually DON'T want the 'models/' prefix
-    // But they might want it if using the native endpoint. 
-    // Since we are using /v1/openai/, let's try removing it if it's there.
-    const model = (originalModel || 'unknown').trim().replace(/^`|`$/g, '').trim()
-      .replace(/^models\//, '');
+    // in the body, as the endpoint path already includes the versioning.
+    // However, we should be careful not to break other providers.
+    const model = (originalModel || 'unknown').trim().replace(/^`|`$/g, '').trim();
 
     const defaultHeaders =
       this.isGemini && apiKey

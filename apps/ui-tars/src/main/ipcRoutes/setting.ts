@@ -45,7 +45,8 @@ export const settingRoute = t.router({
     .handle(async ({ input }) => {
       const isGemini =
         input.baseUrl.includes('generativelanguage.googleapis.com') ||
-        input.modelName.includes('gemini-2.5-flash');
+        input.baseUrl.includes('ai.google.dev') ||
+        input.modelName.toLowerCase().includes('gemini');
       const baseURL = isGemini
           ? normalizeGeminiOpenAIBaseUrl(input.baseUrl)
           : input.baseUrl;
