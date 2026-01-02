@@ -53,8 +53,8 @@ export const getVlmDefaults = (provider?: VLMProviderV2) => {
   if (provider === VLMProviderV2.gemini) {
     return {
       vlmProvider: VLMProviderV2.gemini,
-      vlmBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-      vlmModelName: 'gemini-1.5-flash',
+      vlmBaseUrl: 'https://ai.google.dev/gemini-api/docs/live',
+      vlmModelName: 'gemini-2.5-flash-native-audio-preview',
       useResponsesApi: false,
     };
   }

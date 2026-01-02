@@ -38,8 +38,8 @@ describe('getVlmDefaults', () => {
   it('should provide Gemini defaults compatible with OpenAI-style endpoint', () => {
     expect(getVlmDefaults(VLMProviderV2.gemini)).toEqual({
       vlmProvider: VLMProviderV2.gemini,
-      vlmBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
-      vlmModelName: 'gemini-1.5-flash',
+      vlmBaseUrl: 'https://ai.google.dev/gemini-api/docs/live',
+      vlmModelName: 'gemini-2.5-flash-native-audio-preview',
       useResponsesApi: false,
     });
   });

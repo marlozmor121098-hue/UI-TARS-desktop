@@ -43,9 +43,11 @@ export const settingRoute = t.router({
       modelName: string;
     }>()
     .handle(async ({ input }) => {
-      const isGemini = isGeminiBaseUrl(input.baseUrl);
+      const isGemini =
+        input.baseUrl === 'https://ai.google.dev/gemini-api/docs/live' ||
+        input.modelName === 'gemini-2.5-flash-native-audio-preview';
       const baseURL = isGemini
-        ? normalizeGeminiOpenAIBaseUrl(input.baseUrl)
+        ? 'https://generativelanguage.googleapis.com/v1/openai/'
         : input.baseUrl;
 
       logger.info(
@@ -89,36 +91,47 @@ export const settingRoute = t.router({
 
       try {
         if (isGemini) {
-          // Variants for Gemini
-          const versions = ['/v1beta', '/v1'];
-          const prefixes = ['', 'models/'];
+          // Variants for Gemini - Strictly use the requested model
+          const versions = ['/v1'];
+          const prefixes = ['models/']; // Google models need 'models/'
           const headerConfigs = [
-            { 'x-goog-api-key': input.apiKey }, // Only custom header
-            undefined, // Standard OpenAI header (Authorization: Bearer)
+            { 'x-goog-api-key': input.apiKey },
+            { Authorization: `Bearer ${input.apiKey}` },
           ];
 
+          const testModels = ['gemini-2.5-flash-native-audio-preview'];
+
           for (const version of versions) {
-            const vBaseURL = baseURL.includes('/v1beta')
-              ? baseURL.replace('/v1beta', version)
-              : baseURL.includes('/v1')
-                ? baseURL.replace('/v1', version)
-                : baseURL;
+            let vBaseURL = baseURL;
+            if (vBaseURL.includes('/v1')) {
+              vBaseURL = vBaseURL.replace('/v1', version);
+            } else {
+              vBaseURL = vBaseURL.replace('/openai', `${version}/openai`);
+            }
 
             for (const headers of headerConfigs) {
               const client = new OpenAI({
                 apiKey: input.apiKey,
                 baseURL: vBaseURL,
                 defaultHeaders: headers,
+                dangerouslyAllowBrowser: true,
               });
 
-              for (const prefix of prefixes) {
-                const testModel = input.modelName.startsWith('models/')
-                  ? input.modelName.replace('models/', prefix)
-                  : `${prefix}${input.modelName}`;
+              for (const modelVariant of testModels) {
+                for (const prefix of prefixes) {
+                  const testModel = modelVariant.startsWith('models/')
+                    ? modelVariant.replace('models/', prefix)
+                    : `${prefix}${modelVariant}`;
 
-                const label = `${version} + ${headers ? 'goog-hdr' : 'bearer'} + ${prefix || 'no-prefix'}`;
-                const result = await tryCompletion(client, testModel, label);
-                if (result !== null) return result;
+                  const headerLabel = headers
+                    ? headers['x-goog-api-key']
+                      ? 'goog-hdr'
+                      : 'bearer-hdr'
+                    : 'default-hdr';
+                  const label = `${version} + ${headerLabel} + ${prefix || 'no-prefix'} + ${testModel}`;
+                  const result = await tryCompletion(client, testModel, label);
+                  if (result !== null) return result;
+                }
               }
             }
           }

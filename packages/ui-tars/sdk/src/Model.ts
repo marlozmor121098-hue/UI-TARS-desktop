@@ -113,8 +113,12 @@ export class UITarsModel extends Model {
       ...restOptions
     } = this.modelConfig;
 
+    const isGemini =
+      baseURL?.includes('generativelanguage.googleapis.com') ||
+      baseURL?.includes('ai.google.dev');
+
     const defaultHeaders =
-      baseURL?.includes('generativelanguage.googleapis.com') && apiKey
+      isGemini && apiKey
         ? {
             ...(restOptions as ClientOptions).defaultHeaders,
             'x-goog-api-key': apiKey,
