@@ -210,11 +210,24 @@ export class UITarsModel extends Model {
         }
       }
 
-      // Simplify merged messages: if content is an array with only one text part, convert it to a string.
+      // Simplify merged messages: if content is an array, merge consecutive text parts.
       // Many Gemini proxies prefer string content over array-of-objects content for text-only messages.
       for (const msg of mergedMessages) {
-        if (Array.isArray(msg.content) && msg.content.length === 1 && msg.content[0].type === 'text') {
-          msg.content = msg.content[0].text;
+        if (Array.isArray(msg.content)) {
+          const newContent: any[] = [];
+          for (const part of msg.content) {
+            const lastPart = newContent[newContent.length - 1];
+            if (lastPart && lastPart.type === 'text' && part.type === 'text') {
+              lastPart.text += (lastPart.text.endsWith('\n') || part.text.startsWith('\n') ? '' : '\n') + part.text;
+            } else {
+              newContent.push({ ...part });
+            }
+          }
+          msg.content = newContent;
+
+          if (msg.content.length === 1 && msg.content[0].type === 'text') {
+            msg.content = msg.content[0].text;
+          }
         }
       }
 
@@ -323,6 +336,11 @@ export class UITarsModel extends Model {
       // 8192 is a safe common limit for Gemini output tokens.
       if (effectiveMaxTokens > 8192) {
         effectiveMaxTokens = 8192; 
+      }
+      // For Gemini, it's often better to not send max_tokens at all unless it's small,
+      // as the API has its own defaults and can be picky.
+      if (effectiveMaxTokens >= 8192) {
+        effectiveMaxTokens = undefined as any;
       }
     }
 
