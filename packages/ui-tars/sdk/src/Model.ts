@@ -125,13 +125,13 @@ export class UITarsModel extends Model {
       ...restOptions
     } = this.modelConfig;
 
-    // For Gemini via OpenAI compatibility, some adapters require the 'models/' prefix,
-    // while others (like the official /openai/ endpoint) might work with or without it.
-    // However, many reports suggest 'models/' prefix is safer for specific preview models.
+    // For Gemini via OpenAI compatibility, the official /openai/ endpoint 
+    // expects the model name WITHOUT the 'models/' prefix.
+    // Some third-party proxies might require it, but for the official one it should be bare.
     let model = (originalModel || 'unknown').trim().replace(/^`|`$/g, '').trim();
     if (this.isGemini) {
-      if (!model.startsWith('models/')) {
-        model = `models/${model}`;
+      if (model.startsWith('models/')) {
+        model = model.replace('models/', '');
       }
     }
 
@@ -240,18 +240,15 @@ export class UITarsModel extends Model {
             expectedRole = 'user'; // After assistant comes user
           } else {
             // Expected assistant, but got user. 
-            // This happens if we have User, User (already merged) or User, User that wasn't merged.
-            // Since we merged above, this shouldn't happen often.
-            // If it does, we can either skip or merge with previous.
+            // Since we merged above, this means we have two user messages in a row that weren't merged for some reason.
             const lastMsg = alternatingMessages[alternatingMessages.length - 1];
             if (lastMsg && lastMsg.role === 'user') {
               // Merge content with previous user message
               const lastContent = Array.isArray(lastMsg.content) ? lastMsg.content : [{ type: 'text', text: String(lastMsg.content || '') }];
               const newContent = Array.isArray(msg.content) ? msg.content : [{ type: 'text', text: String(msg.content || '') }];
               lastMsg.content = [...lastContent, ...newContent];
-              // expectedRole remains assistant
             } else {
-              // Should not happen if logic is correct, but for safety:
+              // Should not happen, but for safety:
               alternatingMessages.push({
                 role: 'assistant',
                 content: 'I will help you with that.'
@@ -262,6 +259,8 @@ export class UITarsModel extends Model {
           }
         }
       }
+      effectiveMessages = alternatingMessages;
+
       // 4. Final check: must start with user and end with user (for inference)
       if (effectiveMessages.length === 0) {
         effectiveMessages.push({
@@ -297,9 +296,14 @@ export class UITarsModel extends Model {
       }
     }
 
-    const defaultHeaders: Record<string, string> = {};
-    if (this.isGemini && apiKey) {
-      defaultHeaders['x-goog-api-key'] = apiKey;
+    const authHeaders: Record<string, string> = {};
+    if (apiKey) {
+      if (this.isGemini && baseURL?.includes('generativelanguage.googleapis.com')) {
+        // Official Google endpoint prefers x-goog-api-key or Authorization: Bearer
+        authHeaders['x-goog-api-key'] = apiKey;
+      } else {
+        authHeaders['Authorization'] = `Bearer ${apiKey}`;
+      }
     }
 
     // Use the provided apiKey for Authorization header. 
@@ -308,11 +312,7 @@ export class UITarsModel extends Model {
       baseURL,
       apiKey: apiKey || 'dummy',
       defaultHeaders: {
-        ...defaultHeaders,
-        // Dual authentication: some proxies want Authorization: Bearer, 
-        // while the official Google OpenAI endpoint wants x-goog-api-key.
-        ...(this.isGemini && apiKey ? { 'x-goog-api-key': apiKey } : {}),
-        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+        ...authHeaders,
       },
       maxRetries: 0,
     });

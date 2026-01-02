@@ -206,7 +206,7 @@ export const convertToOpenAIMessages = ({
           contentParts.push({
             type: 'image_url',
             image_url: { 
-              url: `data:image/png;base64,${imageToUse}`,
+              url: `data:image/jpeg;base64,${imageToUse}`,
             },
           });
         } else {
@@ -224,10 +224,14 @@ export const convertToOpenAIMessages = ({
     }
 
     // Filter out empty text parts
-    const filteredContentParts = contentParts.filter(part => {
+    let filteredContentParts = contentParts.filter(part => {
       if (part.type === 'text') return part.text && part.text.trim().length > 0;
       return true;
     });
+
+    if (filteredContentParts.length === 0) {
+      filteredContentParts = [{ type: 'text', text: 'Continue.' }];
+    }
 
     if (shouldMerge) {
       if (Array.isArray(lastMessage.content)) {
@@ -298,12 +302,12 @@ export async function preprocessResizeImage(
           w: newWidth,
           h: newHeight,
         })
-        .getBuffer('image/png', { quality: 60 });
+        .getBuffer('image/jpeg', { quality: 60 });
 
       return resized.toString('base64');
     }
 
-    const base64 = await image.getBase64('image/png', { quality: 60 });
+    const base64 = await image.getBase64('image/jpeg', { quality: 60 });
 
     return replaceBase64Prefix(base64);
   } catch (error) {

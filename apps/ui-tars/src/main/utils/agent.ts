@@ -34,7 +34,7 @@ export const normalizeGeminiOpenAIBaseUrl = (baseUrl: string) => {
   // Handle documentation URLs that users might accidentally paste
   if (normalized.includes('ai.google.dev') || normalized.includes('google.dev/gemini-api')) {
     // The OpenAI-compatible shim is currently only available on v1beta
-    return 'https://generativelanguage.googleapis.com/v1beta/openai/';
+    return 'https://generativelanguage.googleapis.com/v1beta/openai';
   }
 
   if (normalized.includes('generativelanguage.googleapis.com')) {
@@ -45,11 +45,11 @@ export const normalizeGeminiOpenAIBaseUrl = (baseUrl: string) => {
       if (normalized.endsWith('/openai') || normalized.endsWith('/openai/')) {
         normalized = normalized.replace('/openai', `${version}openai`);
       } else {
-        normalized = normalized.endsWith('/') ? `${normalized}${version.slice(1)}openai/` : `${normalized}${version}openai/`;
+        normalized = normalized.endsWith('/') ? `${normalized}${version.slice(1)}openai` : `${normalized}${version}openai`;
       }
     }
   }
-  return normalized.endsWith('/') ? normalized : `${normalized}/`;
+  return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
 };
 
 export const getModelVersion = (
