@@ -30,6 +30,12 @@ export const normalizeGeminiModelName = (modelName: string) => {
 
 export const normalizeGeminiOpenAIBaseUrl = (baseUrl: string) => {
   let normalized = baseUrl.trim().replace(/^`|`$/g, '').trim();
+  
+  // Handle documentation URLs that users might accidentally paste
+  if (normalized.includes('ai.google.dev') || normalized.includes('google.dev/gemini-api')) {
+    return 'https://generativelanguage.googleapis.com/v1beta/openai/';
+  }
+
   if (normalized.includes('generativelanguage.googleapis.com')) {
     // Force v1beta for better OpenAI compatibility as per Google docs
     if (normalized.includes('/v1/')) {

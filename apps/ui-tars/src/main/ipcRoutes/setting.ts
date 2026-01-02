@@ -90,23 +90,28 @@ export const settingRoute = t.router({
       };
 
       try {
+        // 1. Try exact user configuration first
+        const initialResult = await tryCompletion(openai, input.modelName, 'user-config');
+        if (initialResult !== null) return initialResult;
+
         if (isGemini) {
-          // Variants for Gemini - Strictly use the requested model
-          const versions = ['/v1', '/v1beta'];
-          const prefixes = ['models/']; // Google models need 'models/'
+          // 2. If it's Gemini and user config failed, try common variants
+          const versions = ['/v1beta', '/v1']; // Prefer v1beta
+          const prefixes = ['models/', '']; 
           const headerConfigs = [
             { 'x-goog-api-key': input.apiKey },
             { Authorization: `Bearer ${input.apiKey}` },
           ];
 
           const testModels = [
+            input.modelName,
             'gemini-2.5-flash',
             'gemini-2.5-flash-native-audio-preview',
-            'gemini-2.5-flash-native-audio-preview-12-2025',
           ];
 
           for (const version of versions) {
             let vBaseURL = baseURL;
+            // Robust version replacement
             if (vBaseURL.includes('/v1beta/openai')) {
               vBaseURL = vBaseURL.replace('/v1beta/openai', `${version}/openai`);
             } else if (vBaseURL.includes('/v1/openai')) {
@@ -115,8 +120,6 @@ export const settingRoute = t.router({
               vBaseURL = vBaseURL.replace('/v1beta', version);
             } else if (vBaseURL.includes('/v1')) {
               vBaseURL = vBaseURL.replace('/v1', version);
-            } else {
-              vBaseURL = vBaseURL.replace('/openai', `${version}/openai`);
             }
 
             for (const headers of headerConfigs) {
@@ -128,16 +131,13 @@ export const settingRoute = t.router({
               });
 
               for (const modelVariant of testModels) {
+                if (!modelVariant) continue;
                 for (const prefix of prefixes) {
-                  const testModel = modelVariant.startsWith('models/')
-                    ? modelVariant.replace('models/', prefix)
-                    : `${prefix}${modelVariant}`;
+                  const testModel = (prefix && !modelVariant.startsWith(prefix)) 
+                    ? `${prefix}${modelVariant}` 
+                    : modelVariant;
 
-                  const headerLabel = headers
-                    ? headers['x-goog-api-key']
-                      ? 'goog-hdr'
-                      : 'bearer-hdr'
-                    : 'default-hdr';
+                  const headerLabel = headers['x-goog-api-key'] ? 'goog-hdr' : 'bearer-hdr';
                   const label = `${version} + ${headerLabel} + ${prefix || 'no-prefix'} + ${testModel}`;
                   const result = await tryCompletion(client, testModel, label);
                   if (result !== null) return result;
@@ -145,14 +145,6 @@ export const settingRoute = t.router({
               }
             }
           }
-        } else {
-          // Standard OpenAI / Other VLM
-          const openai = new OpenAI({
-            apiKey: input.apiKey,
-            baseURL,
-          });
-          const result = await tryCompletion(openai, input.modelName, 'initial');
-          if (result !== null) return result;
         }
 
         throw new Error(

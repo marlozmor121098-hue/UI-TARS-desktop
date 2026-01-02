@@ -214,6 +214,13 @@ export const convertToOpenAIMessages = ({
       }
     });
 
+    if (contentParts.length === 0) {
+      contentParts.push({ type: 'text', text: 'Continue.' });
+    } else if (contentParts.length === 1 && contentParts[0].type === 'image_url') {
+      // Gemini and some other models require text alongside images
+      contentParts.push({ type: 'text', text: 'Analyze this screen.' });
+    }
+
     if (shouldMerge) {
       if (Array.isArray(lastMessage.content)) {
         lastMessage.content.push(...contentParts);

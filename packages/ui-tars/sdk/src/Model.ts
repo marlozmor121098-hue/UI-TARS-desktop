@@ -360,14 +360,6 @@ export class UITarsModel extends Model {
       images: this.isGemini ? compressedImages.slice(-1) : compressedImages,
     });
 
-    if (this.isGemini && messages.length > 0 && messages[0].role === 'user') {
-      // Ensure the very first message doesn't start with just an image if possible
-      const firstMsg = messages[0];
-      if (Array.isArray(firstMsg.content) && firstMsg.content[0].type === 'image_url') {
-        firstMsg.content.unshift({ type: 'text', text: 'Analyze this screen and provide the next action.' });
-      }
-    }
-
     // Log the number of messages and images for debugging
     logger.info(`[UITarsModel] invoke: messages=${messages.length}, images=${this.isGemini ? 1 : images.length}, isGemini=${this.isGemini}`);
     if (this.isGemini) {
