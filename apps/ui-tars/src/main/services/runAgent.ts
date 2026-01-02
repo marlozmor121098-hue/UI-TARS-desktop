@@ -216,14 +216,16 @@ export const runAgent = async (
     onError: (params) => {
       const { error } = params;
       logger.error('[onGUIAgentError]', settings, error);
+      
+      let displayError = error?.message || 'Unknown error';
+      if (error?.status) {
+        displayError = `Error ${error.status}: ${displayError}`;
+      }
+      
       setState({
         ...getState(),
         status: StatusEnum.ERROR,
-        errorMsg: JSON.stringify({
-          status: error?.status,
-          message: error?.message,
-          stack: error?.stack,
-        }),
+        errorMsg: displayError,
       });
     },
     retry: {

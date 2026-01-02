@@ -228,10 +228,11 @@ export class BrowserOperator extends Operator {
           break;
 
         case 'navigate':
-          if (!action_inputs.content) {
+          const targetUrl = action_inputs.content || action_inputs.url;
+          if (!targetUrl) {
             throw new Error('No target url specified for navigation');
           }
-          await this.handleNavigate({ url: action_inputs.content });
+          await this.handleNavigate({ url: targetUrl });
           break;
         case 'navigate_back':
           await this.handleNavigateBack();
@@ -563,9 +564,11 @@ export class BrowserOperator extends Operator {
 
     this.logger.info(`Navigating to: ${url}`);
     await page.goto(url, {
-      waitUntil: ['load', 'networkidle2'],
-      timeout: 30000,
+      waitUntil: ['load', 'networkidle2', 'domcontentloaded'],
+      timeout: 60000,
     });
+    // Additional delay to ensure dynamic content is loaded
+    await this.delay(2000);
     this.logger.info('Navigation completed');
   }
 

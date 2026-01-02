@@ -127,7 +127,8 @@ export class UITarsModel extends Model {
 
     // For OpenAI-compatible endpoint, Gemini models usually DON'T want the 'models/' prefix
     // in the body, as the endpoint path already includes the versioning.
-    const model = (originalModel || 'unknown').trim().replace(/^`|`$/g, '').trim();
+    const model = (originalModel || 'unknown').trim().replace(/^`|`$/g, '').trim()
+      .replace(/^models\//, '');
 
     // Clone messages to avoid modifying the original array
     let effectiveMessages = messages.map(msg => ({
@@ -135,17 +136,16 @@ export class UITarsModel extends Model {
       content: Array.isArray(msg.content) ? [...msg.content] : msg.content
     }));
 
-    // Gemini OpenAI endpoint often fails with multiple images. 
-    // Let's ensure only the most recent image is sent if it's Gemini.
+    // Gemini OpenAI endpoint often fails with multiple images or consecutive same-role messages.
     if (this.isGemini) {
+      // 1. Ensure only the most recent image is sent.
       let imageFound = false;
-      // Iterate backwards to keep the most recent image
       for (let i = effectiveMessages.length - 1; i >= 0; i--) {
         const msg = effectiveMessages[i];
         if (Array.isArray(msg.content)) {
           msg.content = msg.content.filter(part => {
             if (part.type === 'image_url') {
-              if (imageFound) return false; // Remove older images
+              if (imageFound) return false;
               imageFound = true;
               return true;
             }
@@ -153,7 +153,38 @@ export class UITarsModel extends Model {
           }) as any;
         }
       }
-    }
+
+      // 2. Strict role alternation: merge consecutive messages with the same role
+       const mergedMessages: any[] = [];
+       for (const msg of effectiveMessages) {
+         // Skip messages with truly empty content as Gemini rejects them
+         if (!msg.content || (Array.isArray(msg.content) && msg.content.length === 0)) {
+           continue;
+         }
+         
+         const lastMsg = mergedMessages[mergedMessages.length - 1];
+         if (lastMsg && lastMsg.role === msg.role) {
+           if (typeof lastMsg.content === 'string' && typeof msg.content === 'string') {
+             lastMsg.content += '\n' + (msg.content || '');
+           } else {
+             const lastContent = Array.isArray(lastMsg.content) ? lastMsg.content : [{ type: 'text', text: String(lastMsg.content || '') }];
+             const newContent = Array.isArray(msg.content) ? msg.content : [{ type: 'text', text: String(msg.content || '') }];
+             lastMsg.content = [...lastContent, ...newContent];
+           }
+         } else {
+           mergedMessages.push(msg);
+         }
+       }
+       effectiveMessages = mergedMessages;
+       
+       // 3. Ensure it doesn't end with an assistant message
+       if (effectiveMessages.length > 0 && effectiveMessages[effectiveMessages.length - 1].role === 'assistant') {
+         effectiveMessages.push({
+           role: 'user',
+           content: 'Please provide the next action based on the state.'
+         });
+       }
+     }
 
     const defaultHeaders =
       this.isGemini && apiKey
@@ -170,8 +201,12 @@ export class UITarsModel extends Model {
     });
 
     let effectiveMaxTokens = max_tokens ?? (uiTarsVersion == UITarsModelVersion.V1_5 ? 65535 : 1000);
-    if (this.isGemini && effectiveMaxTokens > 8192) {
-      effectiveMaxTokens = 8192; 
+    if (this.isGemini) {
+      // Gemini 2.5 Flash supports up to 32K input tokens, but we limit output tokens.
+      // 8192 is a safe common limit for Gemini output tokens.
+      if (effectiveMaxTokens > 8192) {
+        effectiveMaxTokens = 8192; 
+      }
     }
 
     const createCompletionPrams: any = {
@@ -180,7 +215,7 @@ export class UITarsModel extends Model {
       stream: false,
     };
 
-    if (effectiveMaxTokens !== null && effectiveMaxTokens !== undefined) {
+    if (effectiveMaxTokens && effectiveMaxTokens > 0) {
       createCompletionPrams.max_tokens = effectiveMaxTokens;
     }
 
@@ -190,6 +225,7 @@ export class UITarsModel extends Model {
     } else {
       // Gemini is extremely sensitive to parameters in its OpenAI adapter.
       // We explicitly DO NOT set temperature or top_p to avoid 400 errors.
+      // Some adapters also fail if these are null.
     }
 
     // Only add thinking for non-Gemini models that might support it
@@ -343,6 +379,7 @@ export class UITarsModel extends Model {
 
     // Use Chat Completions API if not using Response API
     try {
+      logger.info(`[UITarsModel] Calling OpenAI API at ${baseURL} with model ${model}`);
       const result = await openai.chat.completions.create(
         createCompletionPramsWithOptionalThinking,
         {
@@ -363,7 +400,15 @@ export class UITarsModel extends Model {
         message: error?.message,
         body: error?.body,
         headers: error?.headers,
+        stack: error?.stack,
       });
+      // Try to log the raw response if possible
+      if (error?.response) {
+        try {
+          const rawBody = await error.response.text();
+          logger?.error('[UITarsModel] Raw Error Body:', rawBody);
+        } catch (e) {}
+      }
       throw error;
     }
   }

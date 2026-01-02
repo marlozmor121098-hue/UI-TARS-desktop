@@ -33,18 +33,19 @@ export const normalizeGeminiOpenAIBaseUrl = (baseUrl: string) => {
   
   // Handle documentation URLs that users might accidentally paste
   if (normalized.includes('ai.google.dev') || normalized.includes('google.dev/gemini-api')) {
-    // Note: Google's OpenAI-compatible endpoint is currently only stable in v1beta
+    // If the user mentions 2.5 or other preview models, v1beta is often required
     return 'https://generativelanguage.googleapis.com/v1beta/openai/';
   }
 
   if (normalized.includes('generativelanguage.googleapis.com')) {
     // Only inject version if none is present
     if (!normalized.includes('/v1/') && !normalized.includes('/v1beta/')) {
+      // Default to v1beta as it's more compatible with newer Gemini models via OpenAI
+      const version = '/v1beta/';
       if (normalized.endsWith('/openai') || normalized.endsWith('/openai/')) {
-        normalized = normalized.replace('/openai', '/v1beta/openai');
+        normalized = normalized.replace('/openai', `${version}openai`);
       } else {
-        // Default to v1beta for OpenAI compatibility
-        normalized = normalized.endsWith('/') ? `${normalized}v1beta/openai/` : `${normalized}/v1beta/openai/`;
+        normalized = normalized.endsWith('/') ? `${normalized}${version.slice(1)}openai/` : `${normalized}${version}openai/`;
       }
     }
   }
@@ -55,6 +56,7 @@ export const getModelVersion = (
   provider: VLMProviderV2 | undefined,
 ): UITarsModelVersion => {
   switch (provider) {
+    case VLMProviderV2.gemini:
     case VLMProviderV2.ui_tars_1_5:
       return UITarsModelVersion.V1_5;
     case VLMProviderV2.ui_tars_1_0:

@@ -318,10 +318,11 @@ export class GUIAgent<T extends Operator> extends BaseGUIAgent<
 
         if (!prediction) {
           logger.error('[GUIAgent] Response Empty:', prediction);
+          // For Gemini, we might want to inject a small nudge if it's empty
           continue;
         }
 
-        const predictionSummary = getSummary(prediction);
+        const predictionSummary = getSummary(prediction) || prediction;
 
         end = Date.now();
         data.conversations.push({
