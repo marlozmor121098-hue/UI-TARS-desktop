@@ -126,14 +126,9 @@ export class UITarsModel extends Model {
     } = this.modelConfig;
 
     // For Gemini via OpenAI compatibility, the official /openai/ endpoint 
-    // expects the model name WITHOUT the 'models/' prefix.
-    // Some third-party proxies might require it, but for the official one it should be bare.
+    // expects the model name. Some proxies need 'models/' but the official one
+    // is usually happy with the bare name. We'll use what's provided.
     let model = (originalModel || 'unknown').trim().replace(/^`|`$/g, '').trim();
-    if (this.isGemini) {
-      if (model.startsWith('models/')) {
-        model = model.replace('models/', '');
-      }
-    }
 
     // For Gemini, we must ensure strict user/assistant role alternation and handle system role.
     // Also remove 'detail' from image_url as Gemini (via OpenAI shim) doesn't like it.
@@ -212,21 +207,37 @@ export class UITarsModel extends Model {
 
       // Simplify merged messages: if content is an array, merge consecutive text parts.
       // Many Gemini proxies prefer string content over array-of-objects content for text-only messages.
+      // Also ensure strict [Text, Image] structure for messages with images.
       for (const msg of mergedMessages) {
         if (Array.isArray(msg.content)) {
-          const newContent: any[] = [];
+          let combinedText = '';
+          const images: any[] = [];
+          
           for (const part of msg.content) {
-            const lastPart = newContent[newContent.length - 1];
-            if (lastPart && lastPart.type === 'text' && part.type === 'text') {
-              lastPart.text += (lastPart.text.endsWith('\n') || part.text.startsWith('\n') ? '' : '\n') + part.text;
-            } else {
-              newContent.push({ ...part });
+            if (part.type === 'text') {
+              combinedText += (combinedText && part.text ? '\n' : '') + (part.text || '');
+            } else if (part.type === 'image_url') {
+              images.push(part);
             }
           }
-          msg.content = newContent;
 
-          if (msg.content.length === 1 && msg.content[0].type === 'text') {
-            msg.content = msg.content[0].text;
+          if (images.length > 0) {
+            // Reconstruct: Text first, then Image(s)
+            msg.content = [];
+            if (combinedText.trim()) {
+              msg.content.push({ type: 'text', text: combinedText });
+            }
+            // Gemini via OpenAI shim typically handles one image per message best, 
+            // but we'll append all if present (UI-TARS usually sends one).
+            msg.content.push(...images);
+          } else {
+            // Text only -> convert to string if possible or keep as single text object
+            if (combinedText) {
+              msg.content = combinedText; // Prefer string for text-only
+            } else {
+               // Empty content? Should have been filtered, but just in case
+               msg.content = ' '; 
+            }
           }
         }
       }
@@ -309,39 +320,27 @@ export class UITarsModel extends Model {
       }
     }
 
-    const authHeaders: Record<string, string> = {};
-    if (apiKey) {
-      if (this.isGemini && baseURL?.includes('generativelanguage.googleapis.com')) {
-        // Official Google endpoint prefers x-goog-api-key or Authorization: Bearer
-        authHeaders['x-goog-api-key'] = apiKey;
-      } else {
-        authHeaders['Authorization'] = `Bearer ${apiKey}`;
-      }
+    if (this.isGemini) {
+      logger.info(`[UITarsModel] Gemini Config: Model=${model}, BaseURL=${baseURL}, KeyProvided=${!!apiKey}`);
+      logger.info(`[UITarsModel] Gemini Request Messages Structure:`, JSON.stringify(effectiveMessages.map(m => ({
+        role: m.role,
+        contentTypes: Array.isArray(m.content) ? m.content.map((c: any) => c.type) : typeof m.content
+      })), null, 2));
     }
 
     // Use the provided apiKey for Authorization header. 
-    // For Gemini's OpenAI-compatible endpoint, this is usually sufficient.
+    // For Gemini's OpenAI-compatible endpoint, standard Bearer auth is usually best.
     const openai = new OpenAI({
       baseURL,
       apiKey: apiKey || 'dummy',
-      defaultHeaders: {
-        ...authHeaders,
-      },
       maxRetries: 0,
     });
 
     let effectiveMaxTokens = max_tokens ?? (uiTarsVersion == UITarsModelVersion.V1_5 ? 65535 : 1000);
     if (this.isGemini) {
-      // Gemini 2.5 Flash supports up to 32K input tokens, but we limit output tokens.
-      // 8192 is a safe common limit for Gemini output tokens.
-      if (effectiveMaxTokens > 8192) {
-        effectiveMaxTokens = 8192; 
-      }
-      // For Gemini, it's often better to not send max_tokens at all unless it's small,
-      // as the API has its own defaults and can be picky.
-      if (effectiveMaxTokens >= 8192) {
-        effectiveMaxTokens = undefined as any;
-      }
+      // Gemini is very picky. If we don't have a specific small limit, 
+      // it's safer to not send max_tokens at all and let the API use its defaults.
+      effectiveMaxTokens = undefined as any;
     }
 
     const createCompletionPrams: any = {
@@ -544,11 +543,21 @@ export class UITarsModel extends Model {
       };
     } catch (error: any) {
       if (this.isGemini) {
-        logger.error('[UITarsModel] Gemini API Error:', {
+        let errorData = error?.response?.data || error?.data;
+        if (error?.response && !errorData) {
+          try {
+            errorData = await error.response.json();
+          } catch (e) {
+            try {
+              errorData = await error.response.text();
+            } catch (e2) {}
+          }
+        }
+
+        logger.error('[UITarsModel] Gemini API Error Details:', {
           status: error?.status,
           message: error?.message,
-          data: error?.response?.data || error?.data,
-          stack: error?.stack,
+          errorData,
           payload: JSON.stringify(createCompletionPrams, (key, value) => {
             if (typeof value === 'string' && value.startsWith('data:image/')) {
               return value.slice(0, 100) + '...[truncated]';

@@ -206,7 +206,7 @@ export const convertToOpenAIMessages = ({
           contentParts.push({
             type: 'image_url',
             image_url: { 
-              url: `data:image/png;base64,${imageToUse}`,
+              url: `data:image/jpeg;base64,${imageToUse}`,
             },
           });
         } else {
@@ -302,12 +302,12 @@ export async function preprocessResizeImage(
           w: newWidth,
           h: newHeight,
         })
-        .getBuffer('image/png', { quality: 60 });
+        .getBuffer('image/jpeg', { quality: 50 });
 
       return resized.toString('base64');
     }
 
-    const base64 = await image.getBase64('image/png', { quality: 60 });
+    const base64 = await image.getBase64('image/jpeg', { quality: 50 });
 
     return replaceBase64Prefix(base64);
   } catch (error) {
