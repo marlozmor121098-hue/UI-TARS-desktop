@@ -231,6 +231,7 @@ export const models = {
   },
   gemini: {
     models: [
+      'gemini-2.5-flash',
       'gemini-2.5-flash-native-audio-preview',
       'gemini-2.0-flash-001',
       'gemini-2.0-flash-lite-preview-02-05',
@@ -239,6 +240,7 @@ export const models = {
     ] as const,
     supportsCompletion: true,
     supportsStreaming: [
+      'gemini-2.5-flash',
       'gemini-2.5-flash-native-audio-preview',
       'gemini-2.0-flash-001',
       'gemini-2.0-flash-lite-preview-02-05',
@@ -246,18 +248,21 @@ export const models = {
       'gemini-1.0-pro',
     ] as const,
     supportsJSON: [
+      'gemini-2.5-flash',
       'gemini-2.5-flash-native-audio-preview',
       'gemini-2.0-flash-001',
       'gemini-2.0-flash-lite-preview-02-05',
       'gemini-1.5-pro',
     ] as const,
     supportsImages: [
+      'gemini-2.5-flash',
       'gemini-2.5-flash-native-audio-preview',
       'gemini-2.0-flash-001',
       'gemini-2.0-flash-lite-preview-02-05',
       'gemini-1.5-pro',
     ] as const,
     supportsToolCalls: [
+      'gemini-2.5-flash',
       'gemini-2.5-flash-native-audio-preview',
       'gemini-2.0-flash-001',
       'gemini-1.5-pro',

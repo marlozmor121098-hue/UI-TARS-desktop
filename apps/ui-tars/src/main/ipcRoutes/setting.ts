@@ -44,11 +44,11 @@ export const settingRoute = t.router({
     }>()
     .handle(async ({ input }) => {
       const isGemini =
-        input.baseUrl === 'https://ai.google.dev/gemini-api/docs/live' ||
-        input.modelName === 'gemini-2.5-flash-native-audio-preview';
+        input.baseUrl.includes('generativelanguage.googleapis.com') ||
+        input.modelName.includes('gemini-2.5-flash');
       const baseURL = isGemini
-        ? 'https://generativelanguage.googleapis.com/v1/openai/'
-        : input.baseUrl;
+          ? normalizeGeminiOpenAIBaseUrl(input.baseUrl)
+          : input.baseUrl;
 
       logger.info(
         `[checkModelAvailability] Testing connection to ${input.baseUrl} (normalized: ${baseURL}), isGemini: ${isGemini}`,
@@ -92,18 +92,28 @@ export const settingRoute = t.router({
       try {
         if (isGemini) {
           // Variants for Gemini - Strictly use the requested model
-          const versions = ['/v1'];
+          const versions = ['/v1', '/v1beta'];
           const prefixes = ['models/']; // Google models need 'models/'
           const headerConfigs = [
             { 'x-goog-api-key': input.apiKey },
             { Authorization: `Bearer ${input.apiKey}` },
           ];
 
-          const testModels = ['gemini-2.5-flash-native-audio-preview'];
+          const testModels = [
+            'gemini-2.5-flash',
+            'gemini-2.5-flash-native-audio-preview',
+            'gemini-2.5-flash-native-audio-preview-12-2025',
+          ];
 
           for (const version of versions) {
             let vBaseURL = baseURL;
-            if (vBaseURL.includes('/v1')) {
+            if (vBaseURL.includes('/v1beta/openai')) {
+              vBaseURL = vBaseURL.replace('/v1beta/openai', `${version}/openai`);
+            } else if (vBaseURL.includes('/v1/openai')) {
+              vBaseURL = vBaseURL.replace('/v1/openai', `${version}/openai`);
+            } else if (vBaseURL.includes('/v1beta')) {
+              vBaseURL = vBaseURL.replace('/v1beta', version);
+            } else if (vBaseURL.includes('/v1')) {
               vBaseURL = vBaseURL.replace('/v1', version);
             } else {
               vBaseURL = vBaseURL.replace('/openai', `${version}/openai`);

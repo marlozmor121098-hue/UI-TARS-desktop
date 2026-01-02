@@ -21,14 +21,17 @@ import { hideMainWindow, showMainWindow } from '../window';
 import { SearchEngine } from '@ui-tars/operator-browser';
 
 export const isGeminiBaseUrl = (baseUrl: string) =>
-  baseUrl === 'https://ai.google.dev/gemini-api/docs/live';
+  baseUrl.includes('generativelanguage.googleapis.com');
 
 export const normalizeGeminiModelName = (modelName: string) => {
-  return 'gemini-2.5-flash-native-audio-preview';
+  if (modelName.includes('gemini-2.5-flash')) {
+    return 'gemini-2.5-flash';
+  }
+  return 'gemini-2.5-flash';
 };
 
 export const normalizeGeminiOpenAIBaseUrl = (baseUrl: string) => {
-  return 'https://generativelanguage.googleapis.com/v1/openai/';
+  return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
 };
 
 export const getModelVersion = (
