@@ -115,44 +115,53 @@ export class UITarsModel extends Model {
     const {
       baseURL,
       apiKey,
-      model,
-      max_tokens = uiTarsVersion == UITarsModelVersion.V1_5 ? 65535 : 1000,
-      temperature = 0,
-      top_p = 0.7,
+      model: originalModel,
+      max_tokens,
+      temperature,
+      top_p,
+      useResponsesApi,
       ...restOptions
     } = this.modelConfig;
+
+    // For OpenAI-compatible endpoint, Gemini models usually DON'T want the 'models/' prefix
+    // But they might want it if using the native endpoint. 
+    // Since we are using /v1/openai/, let's try removing it if it's there.
+    const model = (originalModel || 'unknown').trim().replace(/^`|`$/g, '').trim()
+      .replace(/^models\//, '');
 
     const defaultHeaders =
       this.isGemini && apiKey
         ? {
-            ...(restOptions as ClientOptions).defaultHeaders,
             'x-goog-api-key': apiKey,
           }
-        : (restOptions as ClientOptions).defaultHeaders;
+        : {};
 
     const openai = new OpenAI({
-      ...restOptions,
-      maxRetries: 0,
       baseURL,
       apiKey,
       defaultHeaders,
+      maxRetries: 0,
     });
 
     let effectiveMaxTokens = max_tokens ?? (uiTarsVersion == UITarsModelVersion.V1_5 ? 65535 : 1000);
     if (this.isGemini && effectiveMaxTokens > 8192) {
-      effectiveMaxTokens = 8192; // Gemini models usually have 8192 max output tokens
+      effectiveMaxTokens = 8192; 
     }
 
-    const createCompletionPrams: ChatCompletionCreateParamsNonStreaming = {
+    const createCompletionPrams: any = {
       model,
       messages,
       stream: false,
       max_tokens: effectiveMaxTokens,
-      ...(this.isGemini ? {} : {
-        temperature: temperature ?? 0,
-        top_p: top_p ?? 0.7,
-      }),
     };
+
+    if (!this.isGemini) {
+      createCompletionPrams.temperature = temperature ?? 0;
+      createCompletionPrams.top_p = top_p ?? 0.7;
+    } else {
+      // Gemini sometimes prefers temperature to be 1.0 or omitted in OpenAI API
+      // Let's try omitting for now as we were doing, but ensure it's not 0 if we do send it.
+    }
 
     // Only add thinking for non-Gemini models that might support it
     const isDeepSeek = model.toLowerCase().includes('deepseek');
@@ -306,20 +315,30 @@ export class UITarsModel extends Model {
     }
 
     // Use Chat Completions API if not using Response API
-    const result = await openai.chat.completions.create(
-      createCompletionPramsWithOptionalThinking,
-      {
-        ...options,
-        timeout: 1000 * 30,
-        headers,
-      },
-    );
+    try {
+      const result = await openai.chat.completions.create(
+        createCompletionPramsWithOptionalThinking,
+        {
+          ...options,
+          timeout: 1000 * 30,
+          headers,
+        },
+      );
 
-    return {
-      prediction: result.choices?.[0]?.message?.content ?? '',
-      costTime: Date.now() - startTime,
-      costTokens: result.usage?.total_tokens ?? 0,
-    };
+      return {
+        prediction: result.choices?.[0]?.message?.content ?? '',
+        costTime: Date.now() - startTime,
+        costTokens: result.usage?.total_tokens ?? 0,
+      };
+    } catch (error: any) {
+      logger?.error('[UITarsModel] OpenAI API Error:', {
+        status: error?.status,
+        message: error?.message,
+        body: error?.body,
+        headers: error?.headers,
+      });
+      throw error;
+    }
   }
 
   async invoke(params: InvokeParams): Promise<InvokeOutput> {

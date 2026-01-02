@@ -217,8 +217,8 @@ export const convertToOpenAIMessages = ({
     if (contentParts.length === 0) {
       contentParts.push({ type: 'text', text: 'Continue.' });
     } else if (contentParts.length === 1 && contentParts[0].type === 'image_url') {
-      // Gemini and some other models require text alongside images
-      contentParts.push({ type: 'text', text: 'Analyze this screen.' });
+      // Gemini and some other models require text alongside images, often preferring text first
+      contentParts.unshift({ type: 'text', text: 'Analyze this screen and provide the next action.' });
     }
 
     if (shouldMerge) {
