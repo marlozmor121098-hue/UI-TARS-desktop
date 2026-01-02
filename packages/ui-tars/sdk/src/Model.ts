@@ -80,10 +80,12 @@ export class UITarsModel extends Model {
   }
 
   get isGemini(): boolean {
-    const { baseURL } = this.modelConfig;
+    const { baseURL, model } = this.modelConfig;
+    const modelName = (model || '').toLowerCase();
     return (
       baseURL?.includes('generativelanguage.googleapis.com') ||
       baseURL?.includes('ai.google.dev') ||
+      modelName.includes('gemini') ||
       false
     );
   }
@@ -111,7 +113,7 @@ export class UITarsModel extends Model {
     responseId?: string;
   }> {
     const { logger } = useContext();
-    const { messages, previousResponseId } = params;
+    let { messages, previousResponseId } = params;
     const {
       baseURL,
       apiKey,
@@ -125,8 +127,33 @@ export class UITarsModel extends Model {
 
     // For OpenAI-compatible endpoint, Gemini models usually DON'T want the 'models/' prefix
     // in the body, as the endpoint path already includes the versioning.
-    // However, we should be careful not to break other providers.
     const model = (originalModel || 'unknown').trim().replace(/^`|`$/g, '').trim();
+
+    // Clone messages to avoid modifying the original array
+    let effectiveMessages = messages.map(msg => ({
+      ...msg,
+      content: Array.isArray(msg.content) ? [...msg.content] : msg.content
+    }));
+
+    // Gemini OpenAI endpoint often fails with multiple images. 
+    // Let's ensure only the most recent image is sent if it's Gemini.
+    if (this.isGemini) {
+      let imageFound = false;
+      // Iterate backwards to keep the most recent image
+      for (let i = effectiveMessages.length - 1; i >= 0; i--) {
+        const msg = effectiveMessages[i];
+        if (Array.isArray(msg.content)) {
+          msg.content = msg.content.filter(part => {
+            if (part.type === 'image_url') {
+              if (imageFound) return false; // Remove older images
+              imageFound = true;
+              return true;
+            }
+            return true;
+          }) as any;
+        }
+      }
+    }
 
     const defaultHeaders =
       this.isGemini && apiKey
@@ -149,24 +176,25 @@ export class UITarsModel extends Model {
 
     const createCompletionPrams: any = {
       model,
-      messages,
+      messages: effectiveMessages,
       stream: false,
-      max_tokens: effectiveMaxTokens,
     };
+
+    if (effectiveMaxTokens !== null && effectiveMaxTokens !== undefined) {
+      createCompletionPrams.max_tokens = effectiveMaxTokens;
+    }
 
     if (!this.isGemini) {
       createCompletionPrams.temperature = temperature ?? 0;
       createCompletionPrams.top_p = top_p ?? 0.7;
     } else {
-      // Gemini sometimes prefers temperature to be 1.0 or omitted in OpenAI API
-      // Let's try omitting for now as we were doing, but ensure it's not 0 if we do send it.
+      // Gemini is extremely sensitive to parameters in its OpenAI adapter.
+      // We explicitly DO NOT set temperature or top_p to avoid 400 errors.
     }
 
     // Only add thinking for non-Gemini models that might support it
     const isDeepSeek = model.toLowerCase().includes('deepseek');
-    const createCompletionPramsWithOptionalThinking:
-      | ChatCompletionCreateParamsNonStreaming
-      | ThinkingVisionProModelConfig = isDeepSeek
+    const createCompletionPramsWithOptionalThinking: any = isDeepSeek
       ? {
           ...createCompletionPrams,
           thinking: {
@@ -190,8 +218,8 @@ export class UITarsModel extends Model {
     logger.info('[UITarsModel] Request Payload:', {
       model: createCompletionPramsWithOptionalThinking.model,
       max_tokens: createCompletionPramsWithOptionalThinking.max_tokens,
-      temperature: (createCompletionPramsWithOptionalThinking as any).temperature,
-      top_p: (createCompletionPramsWithOptionalThinking as any).top_p,
+      temperature: createCompletionPramsWithOptionalThinking.temperature,
+      top_p: createCompletionPramsWithOptionalThinking.top_p,
       messages: truncatedMessages,
     });
 

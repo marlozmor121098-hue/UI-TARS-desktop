@@ -79,7 +79,7 @@ export const getSpByModelVersion = (
     case UITarsModelVersion.DOUBAO_1_5_15B:
       return getSystemPromptDoubao_15_15B(language);
     case UITarsModelVersion.V1_5:
-      return getSystemPromptV1_5(language, 'normal');
+      return getSystemPromptV1_5(language, 'normal', operatorType);
     default:
       return getSystemPrompt(language, operatorType);
   }

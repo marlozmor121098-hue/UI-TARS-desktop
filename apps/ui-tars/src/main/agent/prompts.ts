@@ -29,6 +29,7 @@ ${operatorType === 'browser' ? "navigate(content='xxx') # The content is your ta
 export const getSystemPromptV1_5 = (
   language: 'zh' | 'en',
   useCase: 'normal' | 'poki',
+  operatorType: 'browser' | 'computer' = 'computer',
 ) => `You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task.
 
 ## Output Format
@@ -46,6 +47,7 @@ drag(start_box='<|box_start|>(x1,y1)<|box_end|>', end_box='<|box_start|>(x3,y3)<
 hotkey(key='ctrl c') # Split keys with a space and use lowercase. Also, do not use more than 3 keys in one hotkey action.
 type(content='xxx') # Use escape characters \\', \\", and \\n in content part to ensure we can parse the content in normal python string format. If you want to submit your input, use \\n at the end of content.
 scroll(start_box='<|box_start|>(x1,y1)<|box_end|>', direction='down or up or right or left') # Show more information on the \`direction\` side.
+${operatorType === 'browser' ? "navigate(content='xxx') # The content is your target web's url\nnavigate_back() # Back to the last page" : ''}
 wait() # Sleep for 5s and take a screenshot to check for any changes.
 finished()
 call_user() # Submit the task and call the user when the task is unsolvable, or when you need the user's help.
