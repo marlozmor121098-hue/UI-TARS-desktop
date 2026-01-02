@@ -21,17 +21,27 @@ import { hideMainWindow, showMainWindow } from '../window';
 import { SearchEngine } from '@ui-tars/operator-browser';
 
 export const isGeminiBaseUrl = (baseUrl: string) =>
-  baseUrl.includes('generativelanguage.googleapis.com');
+  baseUrl.includes('generativelanguage.googleapis.com') ||
+  baseUrl.includes('ai.google.dev');
 
 export const normalizeGeminiModelName = (modelName: string) => {
-  if (modelName.includes('gemini-2.5-flash')) {
-    return 'gemini-2.5-flash';
-  }
-  return 'gemini-2.5-flash';
+  return modelName.startsWith('models/') ? modelName : `models/${modelName}`;
 };
 
 export const normalizeGeminiOpenAIBaseUrl = (baseUrl: string) => {
-  return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  let normalized = baseUrl.trim().replace(/^`|`$/g, '').trim();
+  if (normalized.includes('generativelanguage.googleapis.com')) {
+    // Force v1beta for better OpenAI compatibility as per Google docs
+    if (normalized.includes('/v1/')) {
+      normalized = normalized.replace('/v1/', '/v1beta/');
+    } else if (!normalized.includes('/v1beta/')) {
+      // If no version specified, try to inject v1beta
+      if (normalized.endsWith('/openai') || normalized.endsWith('/openai/')) {
+        normalized = normalized.replace('/openai', '/v1beta/openai');
+      }
+    }
+  }
+  return normalized.endsWith('/') ? normalized : `${normalized}/`;
 };
 
 export const getModelVersion = (
@@ -64,7 +74,7 @@ export const getSpByModelVersion = (
     case UITarsModelVersion.V1_5:
       return getSystemPromptV1_5(language, 'normal');
     default:
-      return getSystemPrompt(language);
+      return getSystemPrompt(language, operatorType);
   }
 };
 

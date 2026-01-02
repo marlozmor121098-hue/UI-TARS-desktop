@@ -157,29 +157,101 @@ export const convertToOpenAIMessages = ({
   images: string[];
 }): Array<ChatCompletionMessageParam> => {
   const messages: Array<ChatCompletionMessageParam> = [];
-  let imageIndex = 0;
+  
+  // Count total occurrences of IMAGE_PLACEHOLDER across all conversation values
+  let totalPlaceholders = 0;
+  conversations.forEach(c => {
+    const matches = (c.value || '').match(new RegExp(IMAGE_PLACEHOLDER, 'g'));
+    if (matches) totalPlaceholders += matches.length;
+  });
 
-  conversations.forEach((conv) => {
-    if (conv.value === IMAGE_PLACEHOLDER) {
-      // handle image message
-      if (imageIndex < images.length) {
-        messages.push({
-          role: 'user',
-          content: [
-            {
-              type: 'image_url',
-              image_url: { url: `data:image/png;base64,${images[imageIndex]}` },
-            },
-          ],
-        });
-        imageIndex++;
+  let currentPlaceholderIndex = 0;
+
+  conversations.forEach((conv, index) => {
+    const role = conv.from === 'human' ? 'user' : 'assistant';
+    
+    // Gemini requires strictly alternating roles and first message must be 'user'
+    if (messages.length === 0 && role === 'assistant') {
+      messages.push({
+        role: 'user',
+        content: 'Starting interaction.',
+      });
+    }
+
+    let lastMessage = messages[messages.length - 1];
+    const shouldMerge = lastMessage && lastMessage.role === role;
+
+    // Split the value by the placeholder
+    const parts = (conv.value || '').split(IMAGE_PLACEHOLDER);
+    
+    const contentParts: any[] = [];
+
+    parts.forEach((part, partIdx) => {
+      if (part) {
+        contentParts.push({ type: 'text', text: part });
+      }
+
+      // If not the last part, it means there was a placeholder here
+      if (partIdx < parts.length - 1) {
+        currentPlaceholderIndex++;
+        const isLastImage = currentPlaceholderIndex === totalPlaceholders;
+        
+        // Decide which image to use. 
+        // If we only have 1 image (Gemini case), only use it for the last placeholder.
+        const imageToUse = images.length === 1 
+          ? (isLastImage ? images[0] : null)
+          : images[currentPlaceholderIndex - 1];
+
+        if (imageToUse) {
+          contentParts.push({
+            type: 'image_url',
+            image_url: { url: `data:image/png;base64,${imageToUse}` },
+          });
+        } else {
+          const placeholderText = (index === 0 && partIdx === 0) ? 'Analyzing screen.' : '[Image omitted]';
+          contentParts.push({ type: 'text', text: placeholderText });
+        }
+      }
+    });
+
+    if (shouldMerge) {
+      if (Array.isArray(lastMessage.content)) {
+        lastMessage.content.push(...contentParts);
+      } else {
+        lastMessage.content = [
+          { type: 'text', text: lastMessage.content as string },
+          ...contentParts,
+        ];
       }
     } else {
-      // handle text message
       messages.push({
-        role: conv.from === 'human' ? 'user' : 'assistant',
-        content: conv.value,
+        role,
+        content: contentParts.length === 1 && contentParts[0].type === 'text' 
+          ? contentParts[0].text 
+          : contentParts,
       });
+    }
+  });
+
+  // Final cleanup: merge consecutive text parts in each message
+  messages.forEach(msg => {
+    if (Array.isArray(msg.content)) {
+      const newContent: any[] = [];
+      msg.content.forEach(part => {
+        const lastPart = newContent[newContent.length - 1];
+        if (lastPart && lastPart.type === 'text' && part.type === 'text') {
+          // Add a newline if they were separate parts and don't have one
+          const separator = (lastPart.text.endsWith('\n') || part.text.startsWith('\n')) ? '' : '\n';
+          lastPart.text += separator + part.text;
+        } else {
+          newContent.push(part);
+        }
+      });
+      msg.content = newContent;
+      // If only one text part remains, convert back to string
+      if (msg.content.length === 1 && msg.content[0].type === 'text') {
+        msg.content = msg.content[0].text;
+      }
     }
   });
 

@@ -6,6 +6,7 @@ import { NutJSElectronOperator } from './operator';
 
 export const getSystemPrompt = (
   language: 'zh' | 'en',
+  operatorType: 'browser' | 'computer' = 'computer',
 ) => `You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task.
 
 ## Output Format
@@ -16,6 +17,7 @@ Action: ...
 
 ## Action Space
 ${NutJSElectronOperator.MANUAL.ACTION_SPACES.join('\n')}
+${operatorType === 'browser' ? "navigate(content='xxx') # The content is your target web's url\nnavigate_back() # Back to the last page" : ''}
 
 ## Note
 - Use ${language === 'zh' ? 'Chinese' : 'English'} in \`Thought\` part.

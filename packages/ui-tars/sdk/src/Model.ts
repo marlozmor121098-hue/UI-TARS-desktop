@@ -79,6 +79,15 @@ export class UITarsModel extends Model {
     this.headImageContext = null;
   }
 
+  get isGemini(): boolean {
+    const { baseURL } = this.modelConfig;
+    return (
+      baseURL?.includes('generativelanguage.googleapis.com') ||
+      baseURL?.includes('ai.google.dev') ||
+      false
+    );
+  }
+
   /**
    * call real LLM / VLM Model
    * @param params
@@ -113,12 +122,8 @@ export class UITarsModel extends Model {
       ...restOptions
     } = this.modelConfig;
 
-    const isGemini =
-      baseURL?.includes('generativelanguage.googleapis.com') ||
-      baseURL?.includes('ai.google.dev');
-
     const defaultHeaders =
-      isGemini && apiKey
+      this.isGemini && apiKey
         ? {
             ...(restOptions as ClientOptions).defaultHeaders,
             'x-goog-api-key': apiKey,
@@ -133,28 +138,54 @@ export class UITarsModel extends Model {
       defaultHeaders,
     });
 
+    let effectiveMaxTokens = max_tokens ?? (uiTarsVersion == UITarsModelVersion.V1_5 ? 65535 : 1000);
+    if (this.isGemini && effectiveMaxTokens > 8192) {
+      effectiveMaxTokens = 8192; // Gemini models usually have 8192 max output tokens
+    }
+
     const createCompletionPrams: ChatCompletionCreateParamsNonStreaming = {
       model,
       messages,
       stream: false,
-      seed: null,
-      stop: null,
-      frequency_penalty: null,
-      presence_penalty: null,
-      // custom options
-      max_tokens,
-      temperature,
-      top_p,
+      max_tokens: effectiveMaxTokens,
+      ...(this.isGemini ? {} : {
+        temperature: temperature ?? 0,
+        top_p: top_p ?? 0.7,
+      }),
     };
 
-    const createCompletionPramsThinkingVp: ThinkingVisionProModelConfig = {
-      ...createCompletionPrams,
-      thinking: {
-        type: 'disabled',
-      },
-    };
+    // Only add thinking for non-Gemini models that might support it
+    const isDeepSeek = model.toLowerCase().includes('deepseek');
+    const createCompletionPramsWithOptionalThinking:
+      | ChatCompletionCreateParamsNonStreaming
+      | ThinkingVisionProModelConfig = isDeepSeek
+      ? {
+          ...createCompletionPrams,
+          thinking: {
+            type: 'disabled',
+          },
+        }
+      : createCompletionPrams;
 
     const startTime = Date.now();
+
+    const truncatedMessages = JSON.stringify(
+      messages,
+      (key, value) => {
+        if (typeof value === 'string' && value.startsWith('data:image/')) {
+          return value.slice(0, 50) + '...[truncated]';
+        }
+        return value;
+      },
+      2,
+    );
+    logger.info('[UITarsModel] Request Payload:', {
+      model: createCompletionPramsWithOptionalThinking.model,
+      max_tokens: createCompletionPramsWithOptionalThinking.max_tokens,
+      temperature: (createCompletionPramsWithOptionalThinking as any).temperature,
+      top_p: (createCompletionPramsWithOptionalThinking as any).top_p,
+      messages: truncatedMessages,
+    });
 
     if (this.modelConfig.useResponsesApi) {
       const lastAssistantIndex = messages.findLastIndex(
@@ -221,11 +252,16 @@ export class UITarsModel extends Model {
           ...(responseId && {
             previous_response_id: responseId,
           }),
-          // @ts-expect-error
-          thinking: {
-            type: 'disabled',
-          },
         };
+
+        // Add thinking only if supported
+        if (isDeepSeek) {
+          // @ts-expect-error
+          responseParams.thinking = {
+            type: 'disabled',
+          };
+        }
+
         logger.info(
           '[ResponseAPI] [input]: ',
           truncated,
@@ -271,7 +307,7 @@ export class UITarsModel extends Model {
 
     // Use Chat Completions API if not using Response API
     const result = await openai.chat.completions.create(
-      createCompletionPramsThinkingVp,
+      createCompletionPramsWithOptionalThinking,
       {
         ...options,
         timeout: 1000 * 30,
@@ -313,10 +349,30 @@ export class UITarsModel extends Model {
       images.map((image) => preprocessResizeImage(image, maxPixels)),
     );
 
+    if (this.isGemini) {
+      // For Gemini, we might need to adjust the system prompt or how it's sent
+      // Gemini works best when the system prompt is explicitly marked or the first message
+      // UI-TARS often embeds system prompt in the first message.
+    }
+
     const messages = convertToOpenAIMessages({
       conversations,
-      images: compressedImages,
+      images: this.isGemini ? compressedImages.slice(-1) : compressedImages,
     });
+
+    if (this.isGemini && messages.length > 0 && messages[0].role === 'user') {
+      // Ensure the very first message doesn't start with just an image if possible
+      const firstMsg = messages[0];
+      if (Array.isArray(firstMsg.content) && firstMsg.content[0].type === 'image_url') {
+        firstMsg.content.unshift({ type: 'text', text: 'Analyze this screen and provide the next action.' });
+      }
+    }
+
+    // Log the number of messages and images for debugging
+    logger.info(`[UITarsModel] invoke: messages=${messages.length}, images=${this.isGemini ? 1 : images.length}, isGemini=${this.isGemini}`);
+    if (this.isGemini) {
+      logger.info(`[UITarsModel] Gemini Payload: ${JSON.stringify({ messages })}`);
+    }
 
     const startTime = Date.now();
     const result = await this.invokeModelProvider(
@@ -337,6 +393,10 @@ export class UITarsModel extends Model {
       .finally(() => {
         logger?.info(`[UITarsModel cost]: ${Date.now() - startTime}ms`);
       });
+
+    if (this.isGemini) {
+      logger.info(`[UITarsModel] Gemini Response: ${JSON.stringify(result)}`);
+    }
 
     if (!result.prediction) {
       const err = new Error();
