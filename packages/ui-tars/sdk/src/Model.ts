@@ -125,19 +125,30 @@ export class UITarsModel extends Model {
       ...restOptions
     } = this.modelConfig;
 
-    // For OpenAI-compatible endpoint, Gemini models usually DON'T want the 'models/' prefix
-    // in the body, as the endpoint path already includes the versioning.
-    const model = (originalModel || 'unknown').trim().replace(/^`|`$/g, '').trim()
-      .replace(/^models\//, '');
+    // For Gemini via OpenAI compatibility, the model name should NOT include 'models/' prefix
+    // if using the /openai/ endpoint, but it depends on the specific implementation.
+    // However, the official documentation for the OpenAI endpoint shows names WITHOUT 'models/'.
+    let model = (originalModel || 'unknown').trim().replace(/^`|`$/g, '').trim();
+    if (this.isGemini) {
+      if (model.startsWith('models/')) {
+        model = model.replace('models/', '');
+      }
+    }
 
     // Clone messages to avoid modifying the original array
-    let effectiveMessages = messages.map(msg => ({
+    let effectiveMessages: any[] = messages.map(msg => ({
       ...msg,
       content: Array.isArray(msg.content) ? [...msg.content] : msg.content
     }));
 
-    // Gemini OpenAI endpoint often fails with multiple images or consecutive same-role messages.
+    // Gemini OpenAI endpoint often fails with multiple images, consecutive same-role messages, or 'system' role.
     if (this.isGemini) {
+      // 0. Convert 'system' role to 'user' as some Gemini OpenAI proxies don't support 'system'
+      effectiveMessages = effectiveMessages.map(msg => ({
+        ...msg,
+        role: msg.role === 'system' ? 'user' : msg.role
+      }));
+
       // 1. Ensure only the most recent image is sent.
       let imageFound = false;
       for (let i = effectiveMessages.length - 1; i >= 0; i--) {
@@ -154,49 +165,123 @@ export class UITarsModel extends Model {
         }
       }
 
-      // 2. Strict role alternation: merge consecutive messages with the same role
-       const mergedMessages: any[] = [];
-       for (const msg of effectiveMessages) {
-         // Skip messages with truly empty content as Gemini rejects them
-         if (!msg.content || (Array.isArray(msg.content) && msg.content.length === 0)) {
-           continue;
-         }
-         
-         const lastMsg = mergedMessages[mergedMessages.length - 1];
-         if (lastMsg && lastMsg.role === msg.role) {
-           if (typeof lastMsg.content === 'string' && typeof msg.content === 'string') {
-             lastMsg.content += '\n' + (msg.content || '');
-           } else {
-             const lastContent = Array.isArray(lastMsg.content) ? lastMsg.content : [{ type: 'text', text: String(lastMsg.content || '') }];
-             const newContent = Array.isArray(msg.content) ? msg.content : [{ type: 'text', text: String(msg.content || '') }];
-             lastMsg.content = [...lastContent, ...newContent];
-           }
-         } else {
-           mergedMessages.push(msg);
-         }
-       }
-       effectiveMessages = mergedMessages;
-       
-       // 3. Ensure it doesn't end with an assistant message
-       if (effectiveMessages.length > 0 && effectiveMessages[effectiveMessages.length - 1].role === 'assistant') {
-         effectiveMessages.push({
-           role: 'user',
-           content: 'Please provide the next action based on the state.'
-         });
-       }
-     }
+      // 2. Merge consecutive messages with the same role and deep clean
+      const mergedMessages: any[] = [];
+      for (const msg of effectiveMessages) {
+        // Deep clean content: remove empty text parts and ensure image_url is valid
+        let cleanContent: any = msg.content;
+        if (Array.isArray(msg.content)) {
+          cleanContent = msg.content.filter(part => {
+            if (part.type === 'text') return part.text && part.text.trim().length > 0;
+            if (part.type === 'image_url') {
+              return part.image_url && (part.image_url.url || part.image_url);
+            }
+            return false;
+          });
+        } else if (typeof msg.content === 'string') {
+          if (msg.content.trim().length === 0) continue;
+          cleanContent = msg.content.trim();
+        }
 
-    const defaultHeaders =
-      this.isGemini && apiKey
-        ? {
-            'x-goog-api-key': apiKey,
+        if (!cleanContent || (Array.isArray(cleanContent) && cleanContent.length === 0)) continue;
+
+        const lastMsg = mergedMessages[mergedMessages.length - 1];
+        if (lastMsg && lastMsg.role === msg.role) {
+          // Merge content
+          const lastContent = Array.isArray(lastMsg.content) ? lastMsg.content : [{ type: 'text', text: String(lastMsg.content || '') }];
+          const newContent = Array.isArray(cleanContent) ? cleanContent : [{ type: 'text', text: String(cleanContent || '') }];
+          lastMsg.content = [...lastContent, ...newContent];
+        } else {
+          mergedMessages.push({
+            role: msg.role,
+            content: cleanContent
+          });
+        }
+      }
+
+      effectiveMessages = mergedMessages;
+
+      // 3. Ensure strictly alternating roles (user, assistant, user, assistant...)
+      const alternatingMessages: any[] = [];
+      let expectedRole = 'user';
+      
+      for (let i = 0; i < mergedMessages.length; i++) {
+        const msg = mergedMessages[i];
+        if (msg.role === expectedRole) {
+          alternatingMessages.push(msg);
+          expectedRole = expectedRole === 'user' ? 'assistant' : 'user';
+        } else {
+          if (expectedRole === 'user') {
+            // Expected user, but got assistant. Inject a user nudge.
+            alternatingMessages.push({
+              role: 'user',
+              content: 'Continue.'
+            });
+            alternatingMessages.push(msg);
+            expectedRole = 'user'; // After assistant comes user
+          } else {
+            // Expected assistant, but got user. 
+            // This happens if we have User, User (already merged) or User, User that wasn't merged.
+            // Since we merged above, this shouldn't happen often.
+            // If it does, we can either skip or merge with previous.
+            const lastMsg = alternatingMessages[alternatingMessages.length - 1];
+            if (lastMsg && lastMsg.role === 'user') {
+              // Merge content with previous user message
+              const lastContent = Array.isArray(lastMsg.content) ? lastMsg.content : [{ type: 'text', text: String(lastMsg.content || '') }];
+              const newContent = Array.isArray(msg.content) ? msg.content : [{ type: 'text', text: String(msg.content || '') }];
+              lastMsg.content = [...lastContent, ...newContent];
+              // expectedRole remains assistant
+            } else {
+              // Should not happen if logic is correct, but for safety:
+              alternatingMessages.push({
+                role: 'assistant',
+                content: 'I will help you with that.'
+              });
+              alternatingMessages.push(msg);
+              expectedRole = 'assistant';
+            }
           }
-        : {};
+        }
+      }
+      effectiveMessages = alternatingMessages;
 
+      // 4. Final check: must start with user and end with user (for inference)
+      if (effectiveMessages.length === 0) {
+        effectiveMessages.push({
+          role: 'user',
+          content: 'Analyze the screen and provide the next action.'
+        });
+      } else {
+        if (effectiveMessages[0].role !== 'user') {
+          effectiveMessages.unshift({
+            role: 'user',
+            content: 'Starting interaction.'
+          });
+        }
+        if (effectiveMessages[effectiveMessages.length - 1].role !== 'user') {
+          effectiveMessages.push({
+            role: 'user',
+            content: 'Please provide the next action.'
+          });
+        }
+      }
+  }
+
+    const defaultHeaders: Record<string, string> = {};
+    if (this.isGemini && apiKey) {
+      defaultHeaders['x-goog-api-key'] = apiKey;
+    }
+
+    // Use the provided apiKey for Authorization header. 
+    // For Gemini's OpenAI-compatible endpoint, this is usually sufficient.
     const openai = new OpenAI({
       baseURL,
-      apiKey,
-      defaultHeaders,
+      apiKey: apiKey || 'dummy',
+      defaultHeaders: {
+        ...defaultHeaders,
+        // Some Gemini proxies/endpoints prefer x-goog-api-key
+        ...(this.isGemini && apiKey ? { 'x-goog-api-key': apiKey } : {}),
+      },
       maxRetries: 0,
     });
 
@@ -225,24 +310,24 @@ export class UITarsModel extends Model {
     } else {
       // Gemini is extremely sensitive to parameters in its OpenAI adapter.
       // We explicitly DO NOT set temperature or top_p to avoid 400 errors.
-      // Some adapters also fail if these are null.
+      // Some adapters might also fail if max_tokens is set to null or zero.
+      if (!createCompletionPrams.max_tokens) {
+        delete createCompletionPrams.max_tokens;
+      }
     }
 
     // Only add thinking for non-Gemini models that might support it
     const isDeepSeek = model.toLowerCase().includes('deepseek');
-    const createCompletionPramsWithOptionalThinking: any = isDeepSeek
-      ? {
-          ...createCompletionPrams,
-          thinking: {
-            type: 'disabled',
-          },
-        }
-      : createCompletionPrams;
+    if (isDeepSeek) {
+      createCompletionPrams.thinking = {
+        type: 'disabled',
+      };
+    }
 
     const startTime = Date.now();
 
     const truncatedMessages = JSON.stringify(
-      messages,
+      createCompletionPrams.messages,
       (key, value) => {
         if (typeof value === 'string' && value.startsWith('data:image/')) {
           return value.slice(0, 50) + '...[truncated]';
@@ -252,10 +337,10 @@ export class UITarsModel extends Model {
       2,
     );
     logger.info('[UITarsModel] Request Payload:', {
-      model: createCompletionPramsWithOptionalThinking.model,
-      max_tokens: createCompletionPramsWithOptionalThinking.max_tokens,
-      temperature: createCompletionPramsWithOptionalThinking.temperature,
-      top_p: createCompletionPramsWithOptionalThinking.top_p,
+      model: createCompletionPrams.model,
+      max_tokens: createCompletionPrams.max_tokens,
+      temperature: createCompletionPrams.temperature,
+      top_p: createCompletionPrams.top_p,
       messages: truncatedMessages,
     });
 
@@ -377,11 +462,15 @@ export class UITarsModel extends Model {
       };
     }
 
+    if (this.isGemini) {
+      logger.info('[UITarsModel] Gemini Request Payload:', JSON.stringify(createCompletionPrams, null, 2));
+    }
+
     // Use Chat Completions API if not using Response API
     try {
       logger.info(`[UITarsModel] Calling OpenAI API at ${baseURL} with model ${model}`);
       const result = await openai.chat.completions.create(
-        createCompletionPramsWithOptionalThinking,
+        createCompletionPrams,
         {
           ...options,
           timeout: 1000 * 30,
@@ -389,25 +478,44 @@ export class UITarsModel extends Model {
         },
       );
 
+      if (this.isGemini) {
+        logger.info('[UITarsModel] Gemini Response:', JSON.stringify(result, null, 2));
+      }
+
       return {
         prediction: result.choices?.[0]?.message?.content ?? '',
         costTime: Date.now() - startTime,
         costTokens: result.usage?.total_tokens ?? 0,
       };
     } catch (error: any) {
+      if (this.isGemini) {
+        logger.error('[UITarsModel] Gemini API Error:', {
+          status: error?.status,
+          message: error?.message,
+          data: error?.response?.data || error?.data,
+          payload: JSON.stringify(createCompletionPrams, null, 2).substring(0, 1000) + '...'
+        });
+      }
       logger?.error('[UITarsModel] OpenAI API Error:', {
         status: error?.status,
         message: error?.message,
         body: error?.body,
         headers: error?.headers,
         stack: error?.stack,
+        requestPayload: {
+          model: createCompletionPrams.model,
+          max_tokens: createCompletionPrams.max_tokens,
+          messageCount: createCompletionPrams.messages.length,
+        }
       });
       // Try to log the raw response if possible
       if (error?.response) {
         try {
           const rawBody = await error.response.text();
           logger?.error('[UITarsModel] Raw Error Body:', rawBody);
-        } catch (e) {}
+        } catch (e) {
+          logger?.error('[UITarsModel] Could not read raw error body:', e);
+        }
       }
       throw error;
     }

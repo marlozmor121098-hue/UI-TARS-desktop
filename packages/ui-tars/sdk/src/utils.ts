@@ -205,7 +205,10 @@ export const convertToOpenAIMessages = ({
         if (imageToUse) {
           contentParts.push({
             type: 'image_url',
-            image_url: { url: `data:image/png;base64,${imageToUse}` },
+            image_url: { 
+              url: `data:image/png;base64,${imageToUse}`,
+              detail: 'auto'
+            },
           });
         } else {
           const placeholderText = (index === 0 && partIdx === 0) ? 'Analyzing screen.' : '[Image omitted]';
@@ -221,21 +224,27 @@ export const convertToOpenAIMessages = ({
       contentParts.unshift({ type: 'text', text: 'Analyze this screen and provide the next action.' });
     }
 
+    // Filter out empty text parts
+    const filteredContentParts = contentParts.filter(part => {
+      if (part.type === 'text') return part.text && part.text.trim().length > 0;
+      return true;
+    });
+
     if (shouldMerge) {
       if (Array.isArray(lastMessage.content)) {
-        lastMessage.content.push(...contentParts);
+        lastMessage.content.push(...filteredContentParts);
       } else {
         lastMessage.content = [
           { type: 'text', text: lastMessage.content as string },
-          ...contentParts,
+          ...filteredContentParts,
         ];
       }
     } else {
       messages.push({
         role,
-        content: contentParts.length === 1 && contentParts[0].type === 'text' 
-          ? contentParts[0].text 
-          : contentParts,
+        content: filteredContentParts.length === 1 && filteredContentParts[0].type === 'text' 
+          ? filteredContentParts[0].text 
+          : filteredContentParts,
       });
     }
   });

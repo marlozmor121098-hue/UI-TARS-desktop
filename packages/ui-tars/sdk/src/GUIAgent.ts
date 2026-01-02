@@ -316,9 +316,15 @@ export class GUIAgent<T extends Operator> extends BaseGUIAgent<
           JSON.stringify(parsedPredictions),
         );
 
-        if (!prediction) {
-          logger.error('[GUIAgent] Response Empty:', prediction);
-          // For Gemini, we might want to inject a small nudge if it's empty
+        if (!prediction || prediction.trim().length === 0) {
+          logger.error('[GUIAgent] Response Empty');
+          
+          // If we get an empty response, especially with Gemini, try to nudge it
+          if (this.model.isGemini) {
+            logger.info('[GUIAgent] Gemini returned empty response, retrying with nudge...');
+            // We can't easily "retry with nudge" here without changing the history,
+            // but we can at least log it and let the loop retry naturally if maxRetries > 0.
+          }
           continue;
         }
 

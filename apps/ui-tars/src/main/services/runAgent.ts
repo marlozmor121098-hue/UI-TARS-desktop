@@ -167,7 +167,7 @@ export const runAgent = async (
       break;
   }
 
-  let modelVersion = getModelVersion(settings.vlmProvider);
+  let modelVersion = getModelVersion(settings.vlmProvider, settings.vlmBaseUrl);
   const isGemini = isGeminiBaseUrl(settings.vlmBaseUrl);
   const baseURL = isGemini
     ? normalizeGeminiOpenAIBaseUrl(settings.vlmBaseUrl)

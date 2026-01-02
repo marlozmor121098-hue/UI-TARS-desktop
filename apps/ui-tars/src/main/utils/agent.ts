@@ -54,7 +54,11 @@ export const normalizeGeminiOpenAIBaseUrl = (baseUrl: string) => {
 
 export const getModelVersion = (
   provider: VLMProviderV2 | undefined,
+  baseUrl?: string,
 ): UITarsModelVersion => {
+  if (baseUrl && isGeminiBaseUrl(baseUrl)) {
+    return UITarsModelVersion.V1_5;
+  }
   switch (provider) {
     case VLMProviderV2.gemini:
     case VLMProviderV2.ui_tars_1_5:
