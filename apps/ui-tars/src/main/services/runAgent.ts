@@ -30,6 +30,9 @@ import {
   beforeAgentRun,
   afterAgentRun,
   getLocalBrowserSearchEngine,
+  isGeminiBaseUrl,
+  normalizeGeminiOpenAIBaseUrl,
+  normalizeGeminiModelName,
 } from '../utils/agent';
 import { FREE_MODEL_BASE_URL } from '../remote/shared';
 import { getAuthHeader } from '../remote/auth';
@@ -165,11 +168,20 @@ export const runAgent = async (
   }
 
   let modelVersion = getModelVersion(settings.vlmProvider);
+  const isGemini = isGeminiBaseUrl(settings.vlmBaseUrl);
+  const baseURL = isGemini
+    ? normalizeGeminiOpenAIBaseUrl(settings.vlmBaseUrl)
+    : settings.vlmBaseUrl;
   let modelConfig: UITarsModelConfig = {
-    baseURL: settings.vlmBaseUrl,
+    baseURL,
     apiKey: settings.vlmApiKey,
-    model: settings.vlmModelName,
+    model: isGemini
+      ? normalizeGeminiModelName(settings.vlmModelName)
+      : settings.vlmModelName,
     useResponsesApi: settings.useResponsesApi,
+    ...(isGemini && {
+      defaultHeaders: { 'x-goog-api-key': settings.vlmApiKey },
+    }),
   };
   let modelAuthHdrs: Record<string, string> = {};
 

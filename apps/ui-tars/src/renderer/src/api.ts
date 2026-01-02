@@ -6,5 +6,11 @@ import { createClient } from '@ui-tars/electron-ipc/renderer';
 import type { Router } from '@main/ipcRoutes';
 
 export const api = createClient<Router>({
-  ipcInvoke: window.electron.ipcRenderer.invoke,
+  ipcInvoke: (channel: string, ...args: unknown[]) => {
+    if (!window.electron?.ipcRenderer) {
+      console.error('window.electron.ipcRenderer is not available');
+      return Promise.reject(new Error('IPC renderer not available'));
+    }
+    return window.electron.ipcRenderer.invoke(channel, ...args);
+  },
 });

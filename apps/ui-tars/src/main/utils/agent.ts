@@ -20,6 +20,55 @@ import {
 import { hideMainWindow, showMainWindow } from '../window';
 import { SearchEngine } from '@ui-tars/operator-browser';
 
+export const isGeminiBaseUrl = (baseUrl: string) =>
+  baseUrl.includes('generativelanguage.googleapis.com') ||
+  baseUrl.includes('google.com/v1beta/openai') ||
+  baseUrl.includes('google.com/v1/openai') ||
+  baseUrl.includes('google.com/v1beta') ||
+  baseUrl.includes('google.com/v1');
+
+export const normalizeGeminiModelName = (modelName: string) => {
+  if (
+    (modelName.startsWith('gemini-') || modelName.startsWith('learnlm-')) &&
+    !modelName.startsWith('models/')
+  ) {
+    return `models/${modelName}`;
+  }
+  return modelName;
+};
+
+export const normalizeGeminiOpenAIBaseUrl = (baseUrl: string) => {
+  try {
+    const url = new URL(baseUrl);
+    let path = url.pathname.replace(/\/+$/, '');
+
+    // Remove /chat/completions or /completions if the user accidentally included them
+    path = path.replace(/\/(chat\/)?completions$/, '');
+
+    if (!path || path === '/') {
+      path = '/v1beta/openai';
+    }
+
+    if (!path.includes('/openai')) {
+      if (path.endsWith('/v1beta')) {
+        path = '/v1beta/openai';
+      } else if (path.endsWith('/v1')) {
+        path = '/v1/openai';
+      } else {
+        // Default to v1beta/openai if no version or openai path is present
+        path = '/v1beta/openai';
+      }
+    }
+
+    url.pathname = path;
+    // We return with a trailing slash as per Google documentation for some SDKs,
+    // although OpenAI SDK usually works without it too.
+    return url.toString().replace(/\/+$/, '') + '/';
+  } catch {
+    return 'https://generativelanguage.googleapis.com/v1beta/openai/';
+  }
+};
+
 export const getModelVersion = (
   provider: VLMProviderV2 | undefined,
 ): UITarsModelVersion => {
