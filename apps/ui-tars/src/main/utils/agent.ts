@@ -33,15 +33,15 @@ export const normalizeGeminiOpenAIBaseUrl = (baseUrl: string) => {
   
   // Handle documentation URLs that users might accidentally paste
   if (normalized.includes('ai.google.dev') || normalized.includes('google.dev/gemini-api')) {
-    // If the user mentions 2.5 or other preview models, v1beta is often required
-    return 'https://generativelanguage.googleapis.com/v1beta/openai/';
+    // Some models (like 2.5) might prefer v1beta, but the user explicitly asked for v1
+    return 'https://generativelanguage.googleapis.com/v1/openai/';
   }
 
   if (normalized.includes('generativelanguage.googleapis.com')) {
     // Only inject version if none is present
     if (!normalized.includes('/v1/') && !normalized.includes('/v1beta/')) {
-      // Default to v1beta as it's more compatible with newer Gemini models via OpenAI
-      const version = '/v1beta/';
+      // Default to v1 as requested by user
+      const version = '/v1/';
       if (normalized.endsWith('/openai') || normalized.endsWith('/openai/')) {
         normalized = normalized.replace('/openai', `${version}openai`);
       } else {

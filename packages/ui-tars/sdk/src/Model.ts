@@ -125,31 +125,38 @@ export class UITarsModel extends Model {
       ...restOptions
     } = this.modelConfig;
 
-    // For Gemini via OpenAI compatibility, the model name should NOT include 'models/' prefix
-    // if using the /openai/ endpoint, but it depends on the specific implementation.
-    // However, the official documentation for the OpenAI endpoint shows names WITHOUT 'models/'.
+    // For Gemini via OpenAI compatibility, some adapters require the 'models/' prefix,
+    // while others (like the official /openai/ endpoint) might work with or without it.
+    // However, many reports suggest 'models/' prefix is safer for specific preview models.
     let model = (originalModel || 'unknown').trim().replace(/^`|`$/g, '').trim();
     if (this.isGemini) {
-      if (model.startsWith('models/')) {
-        model = model.replace('models/', '');
+      if (!model.startsWith('models/')) {
+        model = `models/${model}`;
       }
     }
 
-    // Clone messages to avoid modifying the original array
-    let effectiveMessages: any[] = messages.map(msg => ({
-      ...msg,
-      content: Array.isArray(msg.content) ? [...msg.content] : msg.content
-    }));
-
-    // Gemini OpenAI endpoint often fails with multiple images, consecutive same-role messages, or 'system' role.
+    // For Gemini, we must ensure strict user/assistant role alternation and handle system role.
+    // Also remove 'detail' from image_url as Gemini (via OpenAI shim) doesn't like it.
+    let effectiveMessages = messages;
     if (this.isGemini) {
-      // 0. Convert 'system' role to 'user' as some Gemini OpenAI proxies don't support 'system'
-      effectiveMessages = effectiveMessages.map(msg => ({
-        ...msg,
-        role: msg.role === 'system' ? 'user' : msg.role
-      }));
+      effectiveMessages = messages.map((msg) => {
+        const newMsg = { ...msg } as any;
+        if (newMsg.role === 'system' || newMsg.role === 'developer') {
+          newMsg.role = 'user';
+        }
+        if (Array.isArray(newMsg.content)) {
+          newMsg.content = newMsg.content.map((part: any) => {
+            if (part.type === 'image_url' && part.image_url) {
+              const { detail, ...restImageUrl } = part.image_url;
+              return { ...part, image_url: restImageUrl };
+            }
+            return part;
+          });
+        }
+        return newMsg;
+      });
 
-      // 1. Ensure only the most recent image is sent.
+      // 1. Ensure only the most recent image is sent and strip 'detail' which Gemini doesn't like.
       let imageFound = false;
       for (let i = effectiveMessages.length - 1; i >= 0; i--) {
         const msg = effectiveMessages[i];
@@ -158,6 +165,10 @@ export class UITarsModel extends Model {
             if (part.type === 'image_url') {
               if (imageFound) return false;
               imageFound = true;
+              // Strip detail from image_url
+              if (part.image_url && typeof part.image_url === 'object') {
+                delete (part.image_url as any).detail;
+              }
               return true;
             }
             return true;
@@ -196,6 +207,14 @@ export class UITarsModel extends Model {
             role: msg.role,
             content: cleanContent
           });
+        }
+      }
+
+      // Simplify merged messages: if content is an array with only one text part, convert it to a string.
+      // Many Gemini proxies prefer string content over array-of-objects content for text-only messages.
+      for (const msg of mergedMessages) {
+        if (Array.isArray(msg.content) && msg.content.length === 1 && msg.content[0].type === 'text') {
+          msg.content = msg.content[0].text;
         }
       }
 
@@ -243,8 +262,6 @@ export class UITarsModel extends Model {
           }
         }
       }
-      effectiveMessages = alternatingMessages;
-
       // 4. Final check: must start with user and end with user (for inference)
       if (effectiveMessages.length === 0) {
         effectiveMessages.push({
@@ -265,7 +282,20 @@ export class UITarsModel extends Model {
           });
         }
       }
-  }
+
+      // 5. Final pass to ensure no 'detail' in any image_url for Gemini
+      for (const msg of effectiveMessages) {
+        if (Array.isArray(msg.content)) {
+          for (const part of msg.content) {
+            if (part.type === 'image_url' && part.image_url) {
+              if (typeof part.image_url === 'object') {
+                delete (part.image_url as any).detail;
+              }
+            }
+          }
+        }
+      }
+    }
 
     const defaultHeaders: Record<string, string> = {};
     if (this.isGemini && apiKey) {
@@ -279,8 +309,10 @@ export class UITarsModel extends Model {
       apiKey: apiKey || 'dummy',
       defaultHeaders: {
         ...defaultHeaders,
-        // Some Gemini proxies/endpoints prefer x-goog-api-key
+        // Dual authentication: some proxies want Authorization: Bearer, 
+        // while the official Google OpenAI endpoint wants x-goog-api-key.
         ...(this.isGemini && apiKey ? { 'x-goog-api-key': apiKey } : {}),
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
       },
       maxRetries: 0,
     });
@@ -341,7 +373,7 @@ export class UITarsModel extends Model {
       max_tokens: createCompletionPrams.max_tokens,
       temperature: createCompletionPrams.temperature,
       top_p: createCompletionPrams.top_p,
-      messages: truncatedMessages,
+      messages: truncatedMessages, // This will show the actual transformed messages
     });
 
     if (this.modelConfig.useResponsesApi) {
@@ -463,7 +495,12 @@ export class UITarsModel extends Model {
     }
 
     if (this.isGemini) {
-      logger.info('[UITarsModel] Gemini Request Payload:', JSON.stringify(createCompletionPrams, null, 2));
+      logger.info('[UITarsModel] Gemini Request Full Payload:', JSON.stringify(createCompletionPrams, (key, value) => {
+        if (typeof value === 'string' && value.startsWith('data:image/')) {
+          return value.slice(0, 100) + '...[truncated]';
+        }
+        return value;
+      }, 2));
     }
 
     // Use Chat Completions API if not using Response API
@@ -473,7 +510,7 @@ export class UITarsModel extends Model {
         createCompletionPrams,
         {
           ...options,
-          timeout: 1000 * 30,
+          timeout: 1000 * 60, // Increase timeout to 60s for Gemini
           headers,
         },
       );
@@ -493,7 +530,13 @@ export class UITarsModel extends Model {
           status: error?.status,
           message: error?.message,
           data: error?.response?.data || error?.data,
-          payload: JSON.stringify(createCompletionPrams, null, 2).substring(0, 1000) + '...'
+          stack: error?.stack,
+          payload: JSON.stringify(createCompletionPrams, (key, value) => {
+            if (typeof value === 'string' && value.startsWith('data:image/')) {
+              return value.slice(0, 100) + '...[truncated]';
+            }
+            return value;
+          }, 2)
         });
       }
       logger?.error('[UITarsModel] OpenAI API Error:', {

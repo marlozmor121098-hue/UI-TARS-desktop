@@ -207,7 +207,6 @@ export const convertToOpenAIMessages = ({
             type: 'image_url',
             image_url: { 
               url: `data:image/png;base64,${imageToUse}`,
-              detail: 'auto'
             },
           });
         } else {
